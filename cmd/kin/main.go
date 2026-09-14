@@ -19,6 +19,7 @@ import (
 	"github.com/richardwooding/kin/internal/model"
 	"github.com/richardwooding/kin/internal/naairs"
 	"github.com/richardwooding/kin/internal/report"
+	"github.com/richardwooding/kin/internal/tree"
 	"github.com/richardwooding/kin/internal/viz"
 	"github.com/richardwooding/kin/internal/wikidata"
 	"github.com/richardwooding/kin/internal/wikitree"
@@ -60,7 +61,8 @@ func usage() {
   graph build        -seed seed.json -in data/a.json,data/b.json -out data/graph.json
   graph kin          -graph data/graph.json -from seed:me -to wt:Smith-1
   graph report       -graph data/graph.json -from seed:me
-  viz                -graph data/graph.json -seed seed:me [-site site.json] [-notices data/papers.json] [-records records.json] [-probable wt:X] -out dist/index.html
+  viz                -graph data/graph.json -seed seed:me [-site site.json] [-notices data/papers.json] [-records records.json] [-probable wt:X] [-tree-url URL] -out dist/index.html
+  tree               -graph data/graph.json -root seed:me [-reader seed:me] [-gen 20] [-site site.json] [-records records.json] [-probable wt:X] [-dashboard-url URL] -out dist/tree.html   (pan-and-zoom pedigree)
   naairs             -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932] [-out data/naairs_smith.json]   (National Archives of South Africa index)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
   version            print the version, commit and build date
@@ -92,6 +94,8 @@ func main() {
 		cmdGraph(ctx, os.Args[2:])
 	case "viz":
 		cmdViz(os.Args[2:])
+	case "tree":
+		cmdTree(os.Args[2:])
 	case "report":
 		cmdReport(os.Args[2:])
 	case "naairs":
@@ -682,6 +686,7 @@ func cmdViz(args []string) {
 	seed := fs.String("seed", "", "person id the page is about (required)")
 	out := fs.String("out", "dist/index.html", "output html")
 	site := fs.String("site", "", "site json: title, eyebrow, flags, extra ordering rows (optional)")
+	treeURL := fs.String("tree-url", "", "absolute URL of the published family tree page, linked from the header (optional)")
 	notices := fs.String("notices", "data/papers.json", "newspaper notices json from `kin eggsa papers` (optional)")
 	records := fs.String("records", "records.json", "hand-collected record citations json (optional)")
 	var probable multi
@@ -693,8 +698,33 @@ func cmdViz(args []string) {
 	st, err := viz.LoadSite(*site)
 	die(err)
 	die(os.MkdirAll(filepath.Dir(*out), 0o755))
-	die(viz.Render(g, viz.Options{Seed: *seed, NoticesPath: *notices, RecordsPath: *records, ProbableIDs: probable, Site: st}, *out))
+	die(viz.Render(g, viz.Options{Seed: *seed, NoticesPath: *notices, RecordsPath: *records, ProbableIDs: probable, Site: st, TreeURL: *treeURL}, *out))
 	logf("viz: wrote %s", *out)
+}
+
+// ---------------------------------------------------------------- tree
+
+func cmdTree(args []string) {
+	fs := flag.NewFlagSet("tree", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are drawn (required)")
+	reader := fs.String("reader", "", "person the relationship labels are relative to (default: -root)")
+	gen := fs.Int("gen", 20, "generations above root to draw")
+	site := fs.String("site", "", "site json: title and eyebrow are used (optional)")
+	records := fs.String("records", "records.json", "hand-collected record citations json (optional)")
+	dash := fs.String("dashboard-url", "", "absolute URL of the published dashboard page, linked from the panel (optional)")
+	out := fs.String("out", "dist/tree.html", "output html")
+	var probable multi
+	fs.Var(&probable, "probable", "person id from which upward the line is only probable (repeatable)")
+	fs.Parse(args)
+	need("root", *root)
+	g, err := model.Load(*gp)
+	die(err)
+	st, err := viz.LoadSite(*site)
+	die(err)
+	die(os.MkdirAll(filepath.Dir(*out), 0o755))
+	die(tree.Render(g, tree.Options{Root: *root, Reader: *reader, MaxGen: *gen, ProbableIDs: probable, RecordsPath: *records, DashboardURL: *dash, Site: st}, *out))
+	logf("tree: wrote %s", *out)
 }
 
 // ---------------------------------------------------------------- report

@@ -4,7 +4,8 @@ A command-line ancestry toolkit. `kin` pulls family records from public sources
 (WikiTree, the eGGSA gravestone and newspaper indexes, the South African National
 Archives index NAAIRS, Wikidata), merges them with your own hand-entered people
 into one kinship graph, labels every relationship relative to you, and renders
-a single-file ancestry web page and printable A4 reports.
+a single-file ancestry web page, a pan-and-zoom family tree and printable A4
+reports.
 
 It grew out of one family's research in South Africa, Cornwall and London, so the
 South African sources are first-class; the graph, relationship engine, page and
@@ -52,10 +53,11 @@ The `examples/` directory holds a small fictional family. This runs offline:
 kin graph build -seed examples/seed.json -out data/graph.json
 kin graph report -graph data/graph.json -from seed:me
 kin viz -graph data/graph.json -seed seed:me -site examples/site.json -records examples/records.json -out dist/index.html
+kin tree -graph data/graph.json -root seed:me -site examples/site.json -records examples/records.json -out dist/tree.html
 kin report -graph data/graph.json -root seed:me -records examples/records.json -out dist/report.html
 ```
 
-Open `dist/index.html` in a browser. Then replace the seed with your own family
+Open `dist/index.html` and `dist/tree.html` in a browser. Then replace the seed with your own family
 and start pulling records:
 
 ```sh
@@ -81,7 +83,8 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin graph build -seed seed.json -in a.json,b.json` | — | Merges graphs, deduplicating people that carry the same WikiTree or Wikidata id and recording the merge aliases |
 | `kin graph kin -graph data/graph.json -from seed:me -to wt:Smith-1` | — | Labels the relationship and lists the common ancestors |
 | `kin graph report -graph data/graph.json -from seed:me` | — | Counts: network size, documented ancestors by generation, earliest dated ancestor |
-| `kin viz -graph data/graph.json -seed seed:me [-site site.json] [-notices …] [-records …] [-probable id]` | — | Writes the ancestry page |
+| `kin viz -graph data/graph.json -seed seed:me [-site site.json] [-notices …] [-records …] [-probable id] [-tree-url URL]` | — | Writes the ancestry page |
+| `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL]` | — | Writes the pan-and-zoom family tree page |
 | `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …]` | — | Writes a printable A4 ancestry report |
 
 Every subcommand prints its flags with `-h`.
@@ -104,9 +107,11 @@ Ids are namespaced by source:
 | `wd:Q42` | Wikidata item |
 | `eggsa:<hash>` | eGGSA gravestone entry |
 
-Living people are kept out of the rendered tables and network; mark them
-`"living": true` in the seed. WikiTree's own privacy settings already hide most
-living profiles.
+Living people are shown exactly as the seed and the sources record them; the
+`"living": true` flag is carried through the graph for your own filtering but
+hides nothing. WikiTree's own privacy settings already hide most living
+profiles, so keep living people out of the seed if you intend to publish the
+pages.
 
 ### Records
 
@@ -139,9 +144,32 @@ copies" table.
 
 ### Probable links
 
-`-probable id` (repeatable, on `viz` and `report`) marks the given person and all
+`-probable id` (repeatable, on `viz`, `tree` and `report`) marks the given person and all
 their ancestors as resting on a name-and-date match rather than on a record that
 names the parent. The page and report show these in a distinct style.
+
+## Family tree
+
+`kin tree` draws a pedigree on an infinite canvas: the root person at the left,
+parents to the right, grandparents further right, each couple a pair of boxes
+joined by a bracket. Siblings are not drawn (they are listed in the detail
+panel). An ancestor reached by two lines is drawn once, at the lowest
+Ahnentafel number, and later occurrences appear as a dashed "see N" stub.
+
+Controls: drag to pan, scroll or pinch to zoom, the toolbar for zoom in and
+out, fit all and centre on the root, and a search box that flies to a name.
+Keys: `+` `-` zoom, `0` fit, `/` search, `Escape` closes the panel. Click a box
+for the detail panel (dates, places, relationship, Ahnentafel numbers, sources,
+other spouses, children of the couple, attached records). The toggle on a box's
+right edge collapses that branch; the choice is remembered in the browser. The
+accent colour is the status: blue for a person known from a record, amber and
+dashed for a probable link, green for a gravestone, grey for a tree entry.
+
+The dashboard and the tree can link to each other. Because published pages
+often live at two different addresses, the links are given as absolute URLs:
+`kin viz -tree-url URL` puts "Open the family tree" in the dashboard header and
+`kin tree -dashboard-url URL` puts a dashboard link in the tree's panel.
+Relative paths do not survive publishing to separate addresses.
 
 ## Printable reports
 

@@ -54,3 +54,18 @@ func TestRelationship(t *testing.T) {
 		t.Error("stranger should not relate")
 	}
 }
+
+func TestGendered(t *testing.T) {
+	cases := []struct{ label, gender, want string }{
+		{"grandparent", "female", "grandmother"},
+		{"great-great-great-grandparent", "male", "3x great-grandfather"},
+		{"2nd cousin", "male", "2nd cousin"},
+		{"aunt/uncle", "female", "aunt"},
+		{"parent", "", "parent"},
+	}
+	for _, c := range cases {
+		if got := Gendered(c.label, c.gender); got != c.want {
+			t.Errorf("Gendered(%q,%q) = %q, want %q", c.label, c.gender, got, c.want)
+		}
+	}
+}

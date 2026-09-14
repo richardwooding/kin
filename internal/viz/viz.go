@@ -88,6 +88,7 @@ type Options struct {
 	RecordsPath string   // JSON list of hand-collected record citations (optional)
 	ProbableIDs []string // ids from which upward the line is only probable
 	Site        Site
+	TreeURL     string // absolute URL of the published family tree page, linked from the header (optional)
 }
 
 // Payload is the JSON handed to the page.
@@ -101,6 +102,7 @@ type Payload struct {
 	Records    []json.RawMessage          `json:"records"`
 	Probable   []string                   `json:"probable"`
 	Site       Site                       `json:"site"`
+	TreeURL    string                     `json:"treeUrl,omitempty"`
 }
 
 // Render writes the page for g to path.
@@ -115,7 +117,7 @@ func Render(g *model.Graph, opts Options, path string) error {
 			rels[id] = r
 		}
 	}
-	pl := Payload{Seed: opts.Seed, Persons: g.Sorted(), Components: comps, Relations: rels, Site: opts.Site}
+	pl := Payload{Seed: opts.Seed, Persons: g.Sorted(), Components: comps, Relations: rels, Site: opts.Site, TreeURL: opts.TreeURL}
 	for _, id := range opts.ProbableIDs {
 		id = g.Resolve(id)
 		for anc := range graph.Ancestors(g, id) {

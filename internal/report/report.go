@@ -115,7 +115,7 @@ func Render(g *model.Graph, opts Options, path string) error {
 		inLine[p.ID] = true
 		r := Row{Ahnentafel: it.n, Person: p, Status: status(p, probable)}
 		if rel, ok := graph.Relationship(g, opts.Reader, p.ID); ok {
-			r.Generation = gendered(rel.Label, p.Gender)
+			r.Generation = graph.Gendered(rel.Label, p.Gender)
 		}
 		if p.ID == opts.Reader {
 			r.Generation = "self"
@@ -258,32 +258,6 @@ func shortEvent(e string) string {
 		return e[:i]
 	}
 	return e
-}
-
-// gendered turns "great-great-grandparent" into "great-great-grandmother",
-// and compacts three or more greats into "3x great-".
-func gendered(label, gender string) string {
-	g := strings.ToLower(gender)
-	rep := map[string][2]string{
-		"parent": {"father", "mother"}, "child": {"son", "daughter"},
-		"aunt/uncle": {"uncle", "aunt"}, "niece/nephew": {"nephew", "niece"},
-		"sibling (or half-sibling)": {"brother (or half-brother)", "sister (or half-sister)"},
-	}
-	for k, v := range rep {
-		if strings.HasSuffix(label, k) {
-			switch g {
-			case "male":
-				label = strings.TrimSuffix(label, k) + v[0]
-			case "female":
-				label = strings.TrimSuffix(label, k) + v[1]
-			}
-		}
-	}
-	n := strings.Count(label, "great-")
-	if n >= 3 {
-		label = fmt.Sprintf("%dx great-", n) + strings.TrimPrefix(label, strings.Repeat("great-", n))
-	}
-	return label
 }
 
 func status(p *model.Person, probable map[string]bool) string {

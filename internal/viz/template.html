@@ -42,6 +42,8 @@
   h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
   .lede { max-width: 66ch; color: var(--ink-2); margin: 0; }
   .lede strong { color: var(--ink); font-weight: 600; }
+  .links { margin: 0; font-size: 14px; }
+  .links a { color: var(--s1); font-weight: 500; text-decoration-color: currentColor; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
   .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 6px; padding: 14px 16px; display: grid; gap: 2px; }
   .tile .v { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
@@ -109,6 +111,7 @@
     <div class="eyebrow" id="eyebrow">Family history · public records</div>
     <h1 id="title">Kin</h1>
     <p class="lede" id="lede"></p>
+    <p class="links" id="links" hidden><a id="tree-link" target="_blank" rel="noopener">Open the family tree &rarr;</a></p>
   </header>
 
   <section class="tiles" id="tiles"></section>
@@ -245,6 +248,8 @@
   document.getElementById('eyebrow').textContent = site.eyebrow || 'Family history · public records';
   document.getElementById('order-anchor').insertAdjacentHTML('beforebegin',
     (site.orderingRows || []).map(r => `<tr><td>${esc(r.prefix)}</td><td>${esc(r.holding)}</td><td>${esc(r.how)}</td></tr>`).join(''));
+
+  if (data.treeUrl) { document.getElementById('links').hidden = false; document.getElementById('tree-link').href = data.treeUrl; }
 
   // lede + tiles
   document.getElementById('lede').innerHTML =

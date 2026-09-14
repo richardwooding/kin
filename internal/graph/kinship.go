@@ -176,3 +176,29 @@ func Components(g *model.Graph) map[string]int {
 	}
 	return comp
 }
+
+// Gendered turns "great-great-grandparent" into "great-great-grandmother",
+// and compacts three or more greats into "3x great-".
+func Gendered(label, gender string) string {
+	g := strings.ToLower(gender)
+	rep := map[string][2]string{
+		"parent": {"father", "mother"}, "child": {"son", "daughter"},
+		"aunt/uncle": {"uncle", "aunt"}, "niece/nephew": {"nephew", "niece"},
+		"sibling (or half-sibling)": {"brother (or half-brother)", "sister (or half-sister)"},
+	}
+	for k, v := range rep {
+		if strings.HasSuffix(label, k) {
+			switch g {
+			case "male":
+				label = strings.TrimSuffix(label, k) + v[0]
+			case "female":
+				label = strings.TrimSuffix(label, k) + v[1]
+			}
+		}
+	}
+	n := strings.Count(label, "great-")
+	if n >= 3 {
+		label = fmt.Sprintf("%dx great-", n) + strings.TrimPrefix(label, strings.Repeat("great-", n))
+	}
+	return label
+}
