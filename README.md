@@ -14,16 +14,35 @@ Go 1.27, standard library only.
 
 ## Install
 
+Homebrew (macOS):
+
+```sh
+brew install --cask richardwooding/tap/kin
+```
+
+Prebuilt archives for Linux, macOS and Windows (amd64 and arm64) are on the
+[Releases page](https://github.com/richardwooding/kin/releases); each one
+bundles the `examples/` directory. Or build from source:
+
 ```sh
 go install github.com/richardwooding/kin/cmd/kin@latest
 ```
-
-or from a clone:
 
 ```sh
 git clone https://github.com/richardwooding/kin && cd kin
 go build -o bin/kin ./cmd/kin && go test ./...
 ```
+
+A container image is published to `ghcr.io/richardwooding/kin` (linux/amd64
+and linux/arm64, a static distroless base holding only the binary). Mount a
+working directory and run as yourself so output files are writable:
+
+```sh
+docker run --rm --user "$(id -u)" -v "$PWD:/work" -w /work \
+  ghcr.io/richardwooding/kin:latest graph build -seed examples/seed.json -out graph.json
+```
+
+`kin version` prints the version, commit and build date.
 
 ## Quick start
 

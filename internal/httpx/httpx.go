@@ -2,11 +2,14 @@
 // sites kin talks to can see one consistent, contactable user agent.
 package httpx
 
-const (
-	// Version is the toolkit version reported in the user agent.
-	Version = "0.1"
-	// UserAgent identifies kin to the services it queries.
-	UserAgent = "kin/" + Version + " (+https://github.com/richardwooding/kin)"
-	// AppID is the application id sent to the WikiTree API.
-	AppID = "kin"
-)
+// Version is the toolkit version reported in the user agent. The command sets
+// it from the value injected at build time; "dev" means a local build.
+var Version = "dev"
+
+// AppID is the application id sent to the WikiTree API.
+const AppID = "kin"
+
+// UserAgent identifies kin, with its version, to the services it queries.
+func UserAgent() string {
+	return "kin/" + Version + " (+https://github.com/richardwooding/kin)"
+}

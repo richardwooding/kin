@@ -15,12 +15,20 @@ import (
 
 	"github.com/richardwooding/kin/internal/eggsa"
 	"github.com/richardwooding/kin/internal/graph"
+	"github.com/richardwooding/kin/internal/httpx"
 	"github.com/richardwooding/kin/internal/model"
 	"github.com/richardwooding/kin/internal/naairs"
 	"github.com/richardwooding/kin/internal/report"
 	"github.com/richardwooding/kin/internal/viz"
 	"github.com/richardwooding/kin/internal/wikidata"
 	"github.com/richardwooding/kin/internal/wikitree"
+)
+
+// Set at build time by GoReleaser through -ldflags "-X main.version=…".
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func logf(format string, a ...any) { fmt.Fprintf(os.Stderr, format+"\n", a...) }
@@ -55,6 +63,7 @@ func usage() {
   viz                -graph data/graph.json -seed seed:me [-site site.json] [-notices data/papers.json] [-records records.json] [-probable wt:X] -out dist/index.html
   naairs             -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932] [-out data/naairs_smith.json]   (National Archives of South Africa index)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
+  version            print the version, commit and build date
 `)
 	os.Exit(2)
 }
@@ -65,11 +74,14 @@ func (m *multi) String() string     { return strings.Join(*m, ",") }
 func (m *multi) Set(s string) error { *m = append(*m, s); return nil }
 
 func main() {
+	httpx.Version = version
 	if len(os.Args) < 2 {
 		usage()
 	}
 	ctx := context.Background()
 	switch os.Args[1] {
+	case "version", "-version", "--version":
+		fmt.Printf("kin %s (%s, built %s)\n", version, commit, date)
 	case "wikidata":
 		cmdWikidata(ctx, os.Args[2:])
 	case "wikitree":

@@ -1,0 +1,118 @@
+# GoReleaser configuration for the kin CLI. Docs: https://goreleaser.com
+version: 2
+
+project_name: kin
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kin
+    main: ./cmd/kin
+    binary: kin
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    ids: [kin]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - examples/*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^test:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?!?:'
+      order: 0
+    - title: Bug fixes
+      regexp: '^fix(\(.+\))?!?:'
+      order: 1
+    - title: Others
+      order: 999
+
+# Container image built with ko (cross-compiled, no Docker/buildx needed).
+kos:
+  - id: kin
+    build: kin
+    repositories:
+      - ghcr.io/richardwooding/kin
+    base_image: cgr.dev/chainguard/static
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - "{{.Version}}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    sbom: spdx
+    bare: true
+    preserve_import_paths: false
+    labels:
+      org.opencontainers.image.source: "https://github.com/richardwooding/kin"
+      org.opencontainers.image.licenses: "MIT"
+      org.opencontainers.image.description: "Command-line ancestry toolkit: WikiTree, eGGSA, NAAIRS and Wikidata into one kinship graph, with relationship labels, an ancestry page and printable reports"
+      org.opencontainers.image.version: "{{.Version}}"
+      org.opencontainers.image.revision: "{{.Commit}}"
+
+# Homebrew cask published to the richardwooding/homebrew-tap repository (macOS only).
+homebrew_casks:
+  - name: kin
+    binaries:
+      - kin
+    repository:
+      owner: richardwooding
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} {{ .Tag }}"
+    homepage: "https://github.com/richardwooding/kin"
+    description: "Command-line ancestry toolkit: WikiTree, eGGSA, NAAIRS and Wikidata into one kinship graph, with relationship labels, an ancestry page and printable reports"
+    # kin is not yet signed/notarized, so strip the quarantine xattr on install
+    # to let macOS Gatekeeper run the unsigned binary.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kin"]
+          end
+    caveats: |
+      kin is not yet signed/notarized with an Apple Developer ID. The cask
+      removes the quarantine attribute on install so Gatekeeper lets it run. If
+      macOS still blocks it, run:
+        sudo xattr -dr com.apple.quarantine $(brew --prefix)/bin/kin

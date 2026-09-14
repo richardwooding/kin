@@ -32,7 +32,8 @@ var Sites = map[string]string{
 	"World":         "https://gravesworld.eggsa.org/Search/wosearchGraves.htm",
 }
 
-const ua = httpx.UserAgent
+// ua is the user agent sent to the eGGSA sites.
+func ua() string { return httpx.UserAgent() }
 
 var (
 	reForm   = regexp.MustCompile(`(?is)<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>`)
@@ -146,7 +147,7 @@ func searchSite(ctx context.Context, c *http.Client, prov, page, surname string)
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, action.String(), strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", ua)
+	req.Header.Set("User-Agent", ua())
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
@@ -246,7 +247,7 @@ func titleCase(s string) string {
 
 func get(ctx context.Context, c *http.Client, u string) (string, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	req.Header.Set("User-Agent", ua)
+	req.Header.Set("User-Agent", ua())
 	resp, err := c.Do(req)
 	if err != nil {
 		return "", err

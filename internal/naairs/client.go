@@ -59,7 +59,7 @@ func (c *Client) do(ctx context.Context, method, u string, form url.Values) (str
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", httpx.UserAgent)
+	req.Header.Set("User-Agent", httpx.UserAgent())
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}

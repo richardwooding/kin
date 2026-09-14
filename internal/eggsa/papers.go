@@ -168,7 +168,7 @@ func fetchCached(ctx context.Context, c *http.Client, u, cacheDir string, useCac
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		req.Header.Set("User-Agent", ua)
+		req.Header.Set("User-Agent", ua())
 		resp, err := c.Do(req)
 		if err != nil {
 			lastErr = err

@@ -133,7 +133,7 @@ func (c *Client) call(ctx context.Context, params url.Values) (json.RawMessage, 
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("User-Agent", httpx.UserAgent)
+		req.Header.Set("User-Agent", httpx.UserAgent())
 		resp, err := c.HTTP.Do(req)
 		if err != nil {
 			return nil, err

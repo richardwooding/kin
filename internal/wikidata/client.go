@@ -43,7 +43,7 @@ func (c *Client) Query(ctx context.Context, sparql string) ([]binding, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/sparql-results+json")
-	req.Header.Set("User-Agent", httpx.UserAgent)
+	req.Header.Set("User-Agent", httpx.UserAgent())
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (c *Client) SearchHumans(ctx context.Context, term string, max int) ([]stri
 			"format":   {"json"},
 		}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, API+"?"+q.Encode(), nil)
-		req.Header.Set("User-Agent", httpx.UserAgent)
+		req.Header.Set("User-Agent", httpx.UserAgent())
 		resp, err := c.HTTP.Do(req)
 		if err != nil {
 			return ids, err
