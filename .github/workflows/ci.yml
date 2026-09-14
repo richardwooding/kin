@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...
+      - name: build
+        run: go build ./...
+      - name: smoke run on the example family
+        run: |
+          go run ./cmd/kin graph build -seed examples/seed.json -out /tmp/kin/graph.json
+          go run ./cmd/kin graph report -graph /tmp/kin/graph.json -from seed:me
+          go run ./cmd/kin viz -graph /tmp/kin/graph.json -seed seed:me -site examples/site.json -records examples/records.json -notices "" -out /tmp/kin/index.html
+          go run ./cmd/kin report -graph /tmp/kin/graph.json -root seed:me -records examples/records.json -out /tmp/kin/report.html
+          grep -q 'Smith Kin' /tmp/kin/index.html

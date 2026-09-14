@@ -1,0 +1,16 @@
+{
+  "title": "Smith Kin",
+  "eyebrow": "Family history · public records",
+  "flagsNote": "\"Portsmouth line\" marks proven descendants of William Smith (1920, Portsmouth); \"name echo\" marks a William or Peter.",
+  "flags": [
+    { "label": "Portsmouth line", "descendantsOf": "seed:ff", "style": "ok" },
+    { "label": "name echo", "namePattern": "\\b(william|peter)\\b" }
+  ],
+  "orderingRows": [
+    {
+      "prefix": "Estates after the index",
+      "holding": "Master of the High Court for the district where the person died: Port Elizabeth for William (1990) and Anna (1999), Durban for Peter (1988) and Elizabeth (2005).",
+      "how": "A child or grandchild may request a copy of the death notice and liquidation account from the Master's office, quoting name and date of death; identity documents are asked for."
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>{{.Title}}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  :root { --ink: #111; --ink2: #444; --muted: #777; --rule: #d6d3cc; --accent: #2a5d9f; }
+  html, body { margin: 0; color: var(--ink); background: #fff; }
+  body { font: 10.5pt/1.45 "Source Serif Pro", Georgia, "DejaVu Serif", "Liberation Serif", serif; }
+  h1, h2, h3, .eyebrow, th, .tag { font-family: "IBM Plex Sans", "Source Sans Pro", "DejaVu Sans", "Liberation Sans", Arial, sans-serif; }
+  .eyebrow { font-size: 8.5pt; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 6pt; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; letter-spacing: -.01em; line-height: 1.1; }
+  .sub { color: var(--ink2); margin: 0 0 14pt; font-size: 11pt; }
+  h2 { font-size: 12.5pt; margin: 20pt 0 8pt; padding-bottom: 4pt; border-bottom: 1px solid var(--rule); break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 12pt 0 4pt; color: var(--ink2); break-after: avoid; }
+  p { margin: 0 0 8pt; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; }
+  th, td { text-align: left; vertical-align: top; padding: 4pt 6pt 4pt 0; border-bottom: 1px solid var(--rule); }
+  th { font-size: 8pt; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr { break-inside: avoid; }
+  td.n { color: var(--muted); font-variant-numeric: tabular-nums; width: 2.2em; }
+  .name { font-weight: 600; }
+  .gen { color: var(--ink2); font-style: italic; }
+  .tag { display: inline-block; font-size: 7.5pt; letter-spacing: .04em; text-transform: uppercase; padding: 1pt 5pt; border: 1px solid var(--rule); border-radius: 2pt; color: var(--ink2); white-space: nowrap; }
+  .tag.proven { border-color: var(--accent); color: var(--accent); }
+  .tag.probable { border-color: #b8860b; color: #8a6508; }
+  .src { font-size: 8.5pt; color: var(--muted); }
+  .src a { color: var(--accent); text-decoration: none; }
+  ul.kids { margin: 0 0 6pt; padding-left: 14pt; }
+  ul.kids li { margin: 0 0 1pt; }
+  .me { font-weight: 600; }
+  .notes li { margin-bottom: 4pt; }
+  .records td:first-child { white-space: nowrap; }
+  .foot { margin-top: 18pt; padding-top: 6pt; border-top: 1px solid var(--rule); font-size: 8.5pt; color: var(--muted); }
+  a { color: inherit; }
+</style></head><body>
+
+<p class="eyebrow">Ancestry report · prepared for {{.Reader}}</p>
+<h1>{{.Title}}</h1>
+<p class="sub">{{.Subtitle}}</p>
+
+<h2>Direct line</h2>
+<table>
+  <thead><tr><th></th><th>Person</th><th>Born</th><th>Died</th><th>Relation to {{.Reader}}</th><th>Status</th></tr></thead>
+  <tbody>
+  {{range .Line}}<tr>
+    <td class="n">{{.Ahnentafel}}</td>
+    <td><span class="name">{{.Person.Name}}</span>{{if .Sources}}<br><span class="src">{{range $i, $s := .Sources}}{{if $i}} · {{end}}<a href="{{$s.URL}}">{{$s.Label}}</a>{{end}}</span>{{end}}</td>
+    <td>{{date .Person.Birth}}{{if .Person.BirthPlace}}<br><span class="gen">{{place .Person.BirthPlace}}</span>{{end}}</td>
+    <td>{{date .Person.Death}}{{if .Person.DeathPlace}}<br><span class="gen">{{place .Person.DeathPlace}}</span>{{end}}</td>
+    <td class="gen">{{cap .Generation}}</td>
+    <td><span class="tag {{.Status}}">{{.Status}}</span></td>
+  </tr>{{end}}
+  </tbody>
+</table>
+<p class="src" style="margin-top:6pt">Numbering follows the Ahnentafel convention: a person's father is twice their number, their mother twice plus one. <span class="tag proven">proven</span> rests on a record naming the parent; <span class="tag probable">probable</span> rests on a match of name and date not yet confirmed by a record; <span class="tag recorded">recorded</span> is taken from a published tree.</p>
+
+<h2>Families along the line</h2>
+<p>Each couple on the line with all their children known to the graph. Members of the direct line are in bold.</p>
+{{range .Families}}
+<h3>Children of {{.Parents}}</h3>
+<ul class="kids">{{range .Children}}<li{{if index $.Probable .ID}}{{end}}>{{.Name}}{{if or .Birth .BirthPlace}}, b. {{date .Birth}}{{if .BirthPlace}} {{place .BirthPlace}}{{end}}{{end}}{{if .Death}}{{if ne .Death "unknown"}}, d. {{date .Death}}{{if .DeathPlace}} {{place .DeathPlace}}{{end}}{{end}}{{end}}</li>{{end}}</ul>
+{{end}}
+
+{{if .Records}}
+<h2>Records consulted</h2>
+<table class="records">
+  <thead><tr><th>Date</th><th>Event</th><th>People and place</th><th>What it shows</th></tr></thead>
+  <tbody>{{range .Records}}<tr>
+    <td>{{.Date}}</td><td>{{.Event}}</td>
+    <td>{{.Names}}<br><span class="gen">{{.Place}}</span></td>
+    <td>{{.Detail}}<br><span class="src"><a href="{{.URL}}">{{.Collection}}</a>{{if .Image}} · {{.Image}}{{end}}</span></td>
+  </tr>{{end}}</tbody>
+</table>
+{{end}}
+
+<h2>Where to order copies</h2>
+<p>Archive references above (prefixed KAB, TAB or TBE) are index entries from NAAIRS, the National Archives of South Africa's finding aid. Copies of the files are supplied on written request, quoting the full reference:</p>
+<ul class="notes">
+  <li><strong>KAB</strong>: Cape Town Archives Repository, 72 Roeland Street, Cape Town. Estate files (MOOC), Supreme Court cases (CSC), deeds (DOC) and government papers (AG, T).</li>
+  <li><strong>TAB</strong>: National Archives Repository, 24 Hamilton Street, Arcadia, Pretoria. Transvaal estate files (MHG) and Witwatersrand court cases (WLD).</li>
+  <li><strong>TBE</strong>: Port Elizabeth Archives Repository. Eastern Cape court records (GSEE).</li>
+  <li>Estates too recent for the index are held by the Master of the High Court for the district of death; a descendant may request the death notice and account.</li>
+  <li>Cape probate files 1822 to 1990 and Transvaal probate files 1869 to 1961 are also photographed on FamilySearch and can be read there free; only the Anglican register images are restricted to FamilySearch centres.</li>
+  <li>English entries: General Register Office (gro.gov.uk) for civil registration images; Kresen Kernow, Redruth, for Cornish parish registers.</li>
+</ul>
+<p class="src">Contact details for the South African repositories are on the National Archives site, national.archives.gov.za, under Contact information.</p>
+
+{{if .Notes}}
+<h2>Notes and open questions</h2>
+<ul class="notes">{{range .Notes}}<li>{{.}}</li>{{end}}</ul>
+{{end}}
+
+<p class="foot">Generated {{.Generated}} by the kin toolkit from FamilySearch index entries supplied by the reader, WikiTree profiles, and the eGGSA gravestone and newspaper indexes. WikiTree data is contributed by volunteers and should be verified against original records before being relied on.</p>
+</body></html>

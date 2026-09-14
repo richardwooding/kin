@@ -1,0 +1,24 @@
+[
+  {
+    "person": "seed:ff",
+    "names": "William Smith and Anna Botha",
+    "event": "Civil marriage",
+    "date": "1948-04-10",
+    "place": "Port Elizabeth, Cape Province",
+    "detail": "Groom aged 27, fitter, born Portsmouth; bride aged 24, born Graaff-Reinet. Witnesses P. Jones and E. Brown.",
+    "collection": "South Africa, Civil Marriage Records, 1801-1974 (example)",
+    "url": "https://www.familysearch.org/ark:/61903/1:1:EXAMPLE-0001",
+    "image": "Digital folder 000000000_001, image 42"
+  },
+  {
+    "person": "seed:mf",
+    "names": "Peter Jones (deceased); spouse Elizabeth Brown; children Mary",
+    "event": "Probate: death notice",
+    "date": "1988-06-30",
+    "place": "Durban (Master of the Supreme Court, Natal)",
+    "detail": "Aged 63, born Cardiff, railway clerk. Names his parents and one child.",
+    "collection": "NAAIRS index, Pietermaritzburg Archives Repository (example)",
+    "url": "http://www.national.archives.gov.za/naairs.htm",
+    "image": ""
+  }
+]

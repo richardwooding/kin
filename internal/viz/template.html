@@ -1,0 +1,489 @@
+<title>Kin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f3f4f6;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --ring: rgba(11, 11, 11, 0.10);
+    --s1: #2a78d6;   /* direct ancestor */
+    --s3: #1baf7a;   /* relative in the family network */
+    --warn: #8a6508;
+    --link: #c3c2b7;
+    --link-spouse: #dcdbd4;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10);
+      --s1: #3987e5; --s3: #199e70; --warn: #d9a441; --link: #383835; --link-spouse: #2c2c2a;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10);
+    --s1: #3987e5; --s3: #199e70; --warn: #d9a441; --link: #383835; --link-spouse: #2c2c2a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 32px 64px; padding-inline: 20px; display: grid; gap: 28px; }
+  header { display: grid; gap: 10px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 600; letter-spacing: -0.02em; margin: 0; text-wrap: balance; line-height: 1.1; }
+  h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .lede { max-width: 66ch; color: var(--ink-2); margin: 0; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 6px; padding: 14px 16px; display: grid; gap: 2px; }
+  .tile .v { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+  .tile .k { font-size: 13px; color: var(--ink-2); }
+  .tile .k small { display: block; color: var(--muted); font-size: 12px; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 6px; padding: 18px 20px; display: grid; gap: 12px; align-content: start; }
+  .card p.sub { margin: 0; color: var(--ink-2); font-size: 13px; max-width: 60ch; }
+  .lines { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .line { background: var(--surface); border: 1px solid var(--ring); border-radius: 6px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; }
+  .line .who { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-family: var(--mono); }
+  .line .name { font-size: 16px; font-weight: 600; line-height: 1.25; }
+  .line dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13px; }
+  .line dt { color: var(--muted); }
+  .line dd { margin: 0; color: var(--ink-2); }
+  .line dd strong { color: var(--ink); font-weight: 500; }
+  .chart svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
+  .chart text { fill: var(--ink-2); font-size: 12px; }
+  .chart .val { fill: var(--ink); font-weight: 500; }
+  .chart .cat { fill: var(--ink); }
+  .chart .grid line { stroke: var(--grid); stroke-width: 1; }
+  .chart .baseline { stroke: var(--axis); stroke-width: 1; }
+  details { font-size: 13px; color: var(--ink-2); }
+  details summary { cursor: pointer; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-weight: 500; color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tablewrap { overflow-x: auto; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+  a { color: inherit; text-decoration-color: var(--axis); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: var(--ink); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: -1px; }
+  .legend .l1::before { background: var(--s1); }
+  .legend .l3::before { background: var(--s3); }
+  .legend .l0::before { background: var(--ink); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--ink); }
+  #net { position: relative; }
+  #net svg { width: 100%; height: min(72vh, 640px); display: block; background: var(--surface); border-radius: 4px; touch-action: none; }
+  #net .node { stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+  #net .node.c1 { fill: var(--s1); }
+  #net .node.c3 { fill: var(--s3); }
+  #net .node.seed { fill: var(--ink); stroke: var(--surface); stroke-width: 3; }
+  #net .plink { stroke: var(--link); stroke-width: 1; }
+  #net .slink { stroke: var(--link-spouse); stroke-width: 1.5; }
+  #net text.lbl { font-size: 11px; fill: var(--ink-2); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--ring); border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 24px rgba(0,0,0,0.12); max-width: 300px; display: none; }
+  .tip b { font-weight: 600; }
+  .tip .m { color: var(--ink-2); }
+  .tip .mono { color: var(--muted); }
+  .pill { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--ring); color: var(--ink-2); white-space: nowrap; }
+  .pill.ok { border-color: var(--s1); color: var(--ink); }
+  .pill.prob { border-color: var(--warn); color: var(--ink); }
+  .steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); max-width: 70ch; }
+  .steps li strong { color: var(--ink); font-weight: 500; }
+  .foot { color: var(--muted); font-size: 12px; max-width: 80ch; }
+  .hint { color: var(--muted); font-size: 12px; }
+  button.more { margin-top: 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.more:hover, button.more:focus-visible { border-color: var(--ink); outline: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow">Family history · public records</div>
+    <h1 id="title">Kin</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section>
+    <h2 style="margin-bottom:12px">Your four lines</h2>
+    <div class="lines" id="lines"></div>
+  </section>
+
+  <section class="row">
+    <div class="card chart">
+      <h2>Ancestors found, by generation</h2>
+      <p class="sub">How many of the possible ancestors in each generation are documented. Two parents, four grandparents, eight great-grandparents, and so on.</p>
+      <div id="chart-gen"></div>
+      <details><summary>Table view</summary><div class="tablewrap" id="table-gen"></div></details>
+    </div>
+    <div class="card chart">
+      <h2>Where your ancestors were born</h2>
+      <p class="sub">Every documented ancestor with a recorded birthplace, grouped by country or colony as it was at the time.</p>
+      <div id="chart-place"></div>
+      <details><summary>Table view</summary><div class="tablewrap" id="table-place"></div></details>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>The family network</h2>
+    <p class="sub">Your direct ancestors and the people documented within two steps of them by birth or marriage. Hover for details, click to open the source record, drag to rearrange.</p>
+    <div class="legend">
+      <span class="l0">You and your parents</span>
+      <span class="l1">Direct ancestor</span>
+      <span class="l3">Relative in the network</span>
+    </div>
+    <div id="net"><svg></svg><div class="tip" id="tip"></div></div>
+    <div class="hint" id="net-hint"></div>
+  </section>
+
+  <section class="card">
+    <h2>Direct ancestors</h2>
+    <p class="sub">Every documented ancestor, nearest first, with how each is known. A record is a baptism, marriage, death or estate entry naming the parent; a tree entry comes from WikiTree and should be checked against a record before being relied on.</p>
+    <div class="tablewrap" id="table-anc"></div>
+  </section>
+
+  <section class="card">
+    <h2 id="sa-title">South African family records</h2>
+    <p class="sub">Everyone carrying one of your line's surnames who was born, buried or recorded in South Africa across WikiTree and the eGGSA gravestone index. <span id="sa-flags-note"></span></p>
+    <div class="tablewrap" id="table-sa"></div>
+  </section>
+
+  <section class="card" id="sec-records" hidden>
+    <h2>Evidence found on FamilySearch</h2>
+    <p class="sub">Index entries and register images located by hand in logged-in collections. Each one is attached to the person it concerns; the image references point at the register or estate file page.</p>
+    <div class="tablewrap" id="table-records"></div>
+  </section>
+
+  <section class="card" id="sec-order">
+    <h2>Where to order copies</h2>
+    <p class="sub">The archive references on this page are index entries. The files themselves are held as below and copies are supplied on request, quoting the full reference, for example "KAB MOOC 6/9/17813 ref 6448/50".</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Reference prefix</th><th>Holding</th><th>How to order</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">KAB …</td><td>Cape Town Archives Repository, 72 Roeland Street, Cape Town. Cape estate files (MOOC), Supreme Court cases (CSC), deeds (DOC), Attorney-General and Treasury papers (AG, T).</td><td>Written request to the repository with the reference; a photocopy or scan fee applies. Contact details are on the National Archives site under <a href="http://www.national.archives.gov.za/contact_info.htm" target="_blank" rel="noopener">Contact information</a>. Researchers may also read files in the reading room.</td></tr>
+        <tr><td class="mono">TAB …</td><td>National Archives Repository, 24 Hamilton Street, Arcadia, Pretoria. Transvaal estate files (MHG), Witwatersrand court cases (WLD), Transvaal government papers.</td><td>Same procedure, addressed to the Pretoria repository. Estate files usually open with the death notice; ask for that page if the whole file is not needed.</td></tr>
+        <tr><td class="mono">TBE …</td><td>Port Elizabeth Archives Repository. Eastern Cape court and local records (GSEE).</td><td>Same procedure, addressed to Port Elizabeth.</td></tr>
+        <tr id="order-anchor"><td>FamilySearch images</td><td>Cape probate 1822 to 1990 and Transvaal probate 1869 to 1961 are photographed and free to view online, so files in those ranges need not be ordered at all; only the Anglican register images are restricted, and those can be viewed free at any FamilySearch centre or affiliate library.</td><td>Open the record page and step through the film; the folder and image numbers on this page locate each entry.</td></tr>
+        <tr><td>England</td><td>Birth, marriage and death entries: General Register Office, gro.gov.uk, digital images for a fee. Cornish parish registers: Kresen Kernow, the Cornwall archive at Redruth; the free Online Parish Clerks transcriptions used here cite the originals held there.</td><td>GRO orders are placed from the index row; Kresen Kernow supplies copies of register pages on request.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card" id="sec-notices" hidden>
+    <h2 id="notices-title">Notices in South African newspapers</h2>
+    <p class="sub">Births, marriages, deaths and other mentions transcribed by eGGSA volunteers from Cape and other South African papers.</p>
+    <div class="tablewrap" id="table-notices"></div>
+  </section>
+
+  <section class="card">
+    <h2>Open questions</h2>
+    <ol class="steps" id="steps"></ol>
+  </section>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById('data').textContent);
+  const persons = data.persons || [];
+  const byId = new Map(persons.map(p => [p.id, p]));
+  const seed = byId.get(data.seed);
+  const rel = data.relations || {};
+  const comps = data.components || {};
+  const probable = new Set(data.probable || []);
+  const records = data.records || [];
+  const notices = data.notices || [];
+  const site = data.site || {};
+  const siteFlags = (site.flags || []).map(f => ({ ...f, re: f.namePattern ? new RegExp(f.namePattern, 'i') : null }));
+
+  const SA = /south africa|cape colony|cape province|cape town|transvaal|natal|orange free|gauteng|springs|johannesburg|pretoria|durban|boksburg|benoni|germiston|brakpan|witwatersrand|ceres|wynberg|maitland|paarl|durbanville|port elizabeth|kenwyn|roodepoort|maraisburg|krugersdorp|plettenberg|mossel bay|stellenbosch|drakenstein|caep|kaap/i;
+  const isSA = p => SA.test(p.birthPlace || '') || SA.test(p.deathPlace || '');
+  const hasSrc = (p, s) => (p.sources || []).includes(s);
+  const year = s => (s || '').slice(0, 4).replace(/\D/g, '') || '';
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmt = n => n.toLocaleString('en-GB');
+  const isRecord = p => hasSrc(p, 'familysearch') || hasSrc(p, 'user');
+  const status = p => probable.has(p.id) ? 'probable' : isRecord(p) ? 'record' : hasSrc(p, 'eggsa') ? 'gravestone' : 'tree';
+  const pill = p => { const s = status(p); return `<span class="pill ${s === 'record' ? 'ok' : s === 'probable' ? 'prob' : ''}">${s}</span>`; };
+
+  // ancestors of the seed with generation numbers (parents = 1)
+  const anc = new Map();
+  { const q = [[data.seed, 0]]; while (q.length) { const [id, g] = q.shift(); const p = byId.get(id); if (!p) continue;
+      [p.father, p.mother].forEach(a => { if (a && byId.has(a) && !anc.has(a)) { anc.set(a, g + 1); q.push([a, g + 1]); } }); } }
+  const ancestors = [...anc.entries()].map(([id, g]) => ({ p: byId.get(id), g })).sort((a, b) => a.g - b.g || (a.p.birth || '9999').localeCompare(b.p.birth || '9999'));
+  const maxGen = ancestors.length ? Math.max(...ancestors.map(a => a.g)) : 0;
+  const dated = ancestors.filter(a => year(a.p.birth));
+  const earliest = dated.length ? dated.reduce((m, a) => year(a.p.birth) < year(m.p.birth) ? a : m) : null;
+  const provenCount = ancestors.filter(a => status(a.p) === 'record').length;
+  const seedComp = comps[data.seed];
+  const networkSize = Object.values(comps).filter(c => c === seedComp).length;
+  const genName = g => g === 1 ? 'parents' : g === 2 ? 'grandparents' : g === 3 ? 'great-grandparents' : `${g - 2}x great-grandparents`;
+  const genLabel = g => g === 1 ? 'parent' : g === 2 ? 'grandparent' : g === 3 ? 'great-grandparent' : `${g - 2}x great-grandparent`;
+
+  const familyNames = new Set();
+  ancestors.filter(a => a.g <= 3).forEach(a => { if (a.p.surname) familyNames.add(a.p.surname.toLowerCase()); });
+  if (seed && seed.surname) familyNames.add(seed.surname.toLowerCase());
+  const familyRe = new RegExp('^(' + [...familyNames].map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')s?$', 'i');
+  const isFamily = p => familyRe.test((p.surname || '').trim());
+  const familyLabel = [...familyNames].map(n => n[0].toUpperCase() + n.slice(1)).join(', ');
+
+  // site text: title, eyebrow, ordering rows
+  document.title = site.title || 'Kin';
+  document.getElementById('title').textContent = site.title || 'Kin';
+  document.getElementById('eyebrow').textContent = site.eyebrow || 'Family history · public records';
+  document.getElementById('order-anchor').insertAdjacentHTML('beforebegin',
+    (site.orderingRows || []).map(r => `<tr><td>${esc(r.prefix)}</td><td>${esc(r.holding)}</td><td>${esc(r.how)}</td></tr>`).join(''));
+
+  // lede + tiles
+  document.getElementById('lede').innerHTML =
+    `The documented ancestry of <strong>${esc(seed ? seed.name : 'the seed person')}</strong>` +
+    (seed && seed.birthPlace ? `, born ${esc(year(seed.birth))} in ${esc(seed.birthPlace.split(',')[0])}` : '') +
+    `, traced through FamilySearch records, WikiTree profiles and the eGGSA gravestone and newspaper indexes. ` +
+    `<strong>${fmt(ancestors.length)}</strong> ancestors are documented across <strong>${maxGen}</strong> generations` +
+    (earliest ? `; the earliest is ${esc(earliest.p.name)}, born ${esc(year(earliest.p.birth))}${earliest.p.birthPlace ? ' in ' + esc(earliest.p.birthPlace.split(',').slice(-1)[0].trim()) : ''}.` : '.');
+  const tiles = [
+    [ancestors.length, 'documented ancestors', `${provenCount} named in a record`],
+    [maxGen, 'generations deep', earliest ? `back to ${year(earliest.p.birth)}` : ''],
+    [records.length, 'records collected', 'FamilySearch entries and images'],
+    [networkSize, 'people in your family network', 'linked by birth or marriage'],
+    [persons.length, 'people in the graph', 'all sources'],
+  ];
+  document.getElementById('tiles').innerHTML = tiles.map(([v, k, s]) =>
+    `<div class="tile"><div class="v">${fmt(v)}</div><div class="k">${esc(k)}<small>${esc(s)}</small></div></div>`).join('');
+
+  // four lines
+  (function lines() {
+    const father = seed && byId.get(seed.father), mother = seed && byId.get(seed.mother);
+    const gps = [
+      ['Father’s father', father && byId.get(father.father)],
+      ['Father’s mother', father && byId.get(father.mother)],
+      ['Mother’s father', mother && byId.get(mother.father)],
+      ['Mother’s mother', mother && byId.get(mother.mother)],
+    ];
+    const sub = id => { const out = new Map(); const q = [[id, 0]]; while (q.length) { const [c, g] = q.shift(); const p = byId.get(c); if (!p) continue;
+      [p.father, p.mother].forEach(a => { if (a && byId.has(a) && !out.has(a)) { out.set(a, g + 1); q.push([a, g + 1]); } }); } return out; };
+    document.getElementById('lines').innerHTML = gps.map(([who, gp]) => {
+      if (!gp) return `<div class="line"><div class="who">${who}</div><div class="name">Not yet recorded</div></div>`;
+      const s = sub(gp.id);
+      const members = [...s.entries()].map(([id, g]) => ({ p: byId.get(id), g }));
+      const datedM = members.filter(m => year(m.p.birth));
+      const deepest = datedM.length ? datedM.reduce((m, a) => year(a.p.birth) < year(m.p.birth) ? a : m) : null;
+      const depth = members.length ? Math.max(...members.map(m => m.g)) : 0;
+      const probableN = members.filter(m => probable.has(m.p.id)).length;
+      const ends = [{ p: gp, g: 0 }, ...members].filter(m => m.g <= 2 && !(m.p.father && byId.has(m.p.father)) && !(m.p.mother && byId.has(m.p.mother)));
+      const dates = [year(gp.birth), year(gp.death)].filter(Boolean).join(' to ');
+      return `<div class="line">
+        <div class="who">${who}</div>
+        <div class="name">${esc(gp.name)}</div>
+        <dl>
+          <dt>Lived</dt><dd>${esc(dates || 'dates not yet found')}${gp.birthPlace ? `, born ${esc(gp.birthPlace.split(',')[0])}` : ''}</dd>
+          <dt>Traced to</dt><dd>${deepest ? `<strong>${esc(deepest.p.name)}</strong>, born ${esc(year(deepest.p.birth))}${deepest.p.birthPlace ? ' in ' + esc(deepest.p.birthPlace.split(',').slice(-2).join(',').trim()) : ''}` : 'this generation only'}</dd>
+          <dt>Depth</dt><dd>${members.length ? `${members.length} ancestors over ${depth} generation${depth === 1 ? '' : 's'}` : 'no ancestors recorded'}${probableN ? `, <span class="pill prob">${probableN} probable</span>` : ''}</dd>
+          <dt>Stops at</dt><dd>${ends.length ? ends.slice(0, 2).map(e => esc(e.p.name)).join('; ') + ': parents not yet named' : 'no gaps within two generations'}</dd>
+        </dl>
+      </div>`;
+    }).join('');
+  })();
+
+  // bar chart helper
+  function bars(el, tableEl, rows, opts) {
+    const W = 520, barH = 20, gap = 14, left = opts.left || 150, right = 64, top = 8;
+    const H = top + rows.length * (barH + gap) + 24;
+    const max = d3.max(rows, r => Math.max(r.v, r.of || 0)) || 1;
+    const x = d3.scaleLinear().domain([0, max]).nice().range([left, W - right]);
+    const svg = d3.create('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', opts.label);
+    const ticks = x.ticks(4);
+    svg.append('g').attr('class', 'grid').selectAll('line').data(ticks.filter(t => t > 0)).join('line')
+      .attr('x1', d => x(d)).attr('x2', d => x(d)).attr('y1', top).attr('y2', H - 24);
+    svg.append('g').selectAll('text').data(ticks).join('text')
+      .attr('x', d => x(d)).attr('y', H - 8).attr('text-anchor', 'middle').text(d => fmt(d));
+    svg.append('line').attr('class', 'baseline').attr('x1', x(0)).attr('x2', x(0)).attr('y1', top).attr('y2', H - 24);
+    const rowG = svg.append('g').selectAll('g').data(rows).join('g').attr('transform', (d, i) => `translate(0,${top + i * (barH + gap)})`);
+    rowG.append('path')
+      .attr('d', d => { const w = Math.max(0, x(d.v) - x(0)), r = Math.min(4, w);
+        return `M${x(0)},0 H${x(0) + w - r} a${r},${r} 0 0 1 ${r},${r} V${barH - r} a${r},${r} 0 0 1 -${r},${r} H${x(0)} Z`; })
+      .attr('fill', 'var(--s1)').append('title').text(d => `${d.k}: ${fmt(d.v)}${d.of ? ' of ' + fmt(d.of) : ''}`);
+    rowG.append('text').attr('class', 'cat').attr('x', left - 10).attr('y', barH / 2 + 4).attr('text-anchor', 'end').text(d => d.k);
+    rowG.append('text').attr('class', 'val').attr('x', d => x(d.v) + 6).attr('y', barH / 2 + 4).text(d => fmt(d.v) + (d.of ? ` of ${fmt(d.of)}` : ''));
+    el.appendChild(svg.node());
+    const hasOf = rows.some(r => r.of);
+    tableEl.innerHTML = `<table><thead><tr><th>${esc(opts.col)}</th><th class="num">Found</th>${hasOf ? '<th class="num">Possible</th>' : ''}</tr></thead><tbody>` +
+      rows.map(r => `<tr><td>${esc(r.k)}</td><td class="num">${fmt(r.v)}</td>${hasOf ? `<td class="num">${fmt(r.of || 0)}</td>` : ''}</tr>`).join('') + '</tbody></table>';
+  }
+  const genRows = [];
+  for (let g = 1; g <= Math.min(8, Math.max(4, maxGen)); g++) genRows.push({ k: genName(g), v: ancestors.filter(a => a.g === g).length, of: Math.pow(2, g) });
+  bars(document.getElementById('chart-gen'), document.getElementById('table-gen'), genRows, { label: 'Documented ancestors by generation', col: 'Generation', left: 170 });
+
+  const region = s => {
+    if (!s) return null;
+    const t = s.toLowerCase();
+    if (/england|united kingdom|\buk\b|britain|london|surrey|middlesex|hampshire|portsmouth|yorkshire|york|cornwall|devon|lancashire|bermondsey|southwark|kent|essex/.test(t)) return 'England';
+    if (/scotland|ireland|wales/.test(t)) return 'Scotland, Ireland or Wales';
+    if (/south africa|cape|transvaal|natal|orange free|gauteng|johannesburg|caep|kaap|drakenstein|stellenbosch|ceres|wynberg|mossel bay|paarl|tulbagh|swellendam|graaff|tijgerberg|land van waveren|goede hoop|good hope/.test(t)) return 'Cape or South Africa';
+    if (/netherlands|holland|nederland|amsterdam|utrecht|zeeland|friesland|gelderland|brabant|overijssel|groningen|drenthe|vlaanderen|flanders|belgi/.test(t)) return 'Netherlands and Flanders';
+    if (/france|french|normand|calais|picard|guînes|guines|provence|languedoc|dauphin|champagne|bretagne|brittany/.test(t)) return 'France';
+    if (/germany|deutsch|preussen|prussia|köln|koln|saxony|sachsen|hessen|hesse|baden|württemberg|bayern|bavaria|pfalz|hamburg|bremen|hannover|lübeck|römisch|romisch|heiliges/.test(t)) return 'Germany';
+    if (/denmark|norway|sweden|danmark|norge|sverige/.test(t)) return 'Scandinavia';
+    if (/india|ceylon|batavia|java|bengal|madagascar|angola|guinea|mozambique|ternate|macassar|malabar|coromandel/.test(t)) return 'Asia and Africa (VOC world)';
+    return 'Elsewhere';
+  };
+  const placeRows = d3.rollups(ancestors.map(a => region(a.p.birthPlace)).filter(Boolean), v => v.length, d => d).map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
+  bars(document.getElementById('chart-place'), document.getElementById('table-place'), placeRows, { label: 'Birthplaces of documented ancestors', col: 'Region', left: 190 });
+
+  // network
+  (function network() {
+    const adj = new Map();
+    const addEdge = (a, b) => { if (!adj.has(a)) adj.set(a, new Set()); adj.get(a).add(b); if (!adj.has(b)) adj.set(b, new Set()); adj.get(b).add(a); };
+    persons.forEach(p => [p.father, p.mother, ...(p.spouses || [])].forEach(id => { if (id && byId.has(id)) addEdge(p.id, id); }));
+    const HOPS = 2;
+    const dist = new Map(); const queue = [];
+    anc.forEach((g, id) => { dist.set(id, 0); queue.push(id); });
+    while (queue.length) { const cur = queue.shift(); const d = dist.get(cur); if (d >= HOPS) continue;
+      (adj.get(cur) || []).forEach(nb => { if (!dist.has(nb)) { dist.set(nb, d + 1); queue.push(nb); } }); }
+    const nodes = [], links = [], have = new Set();
+    const add = p => { if (p && !have.has(p.id)) { have.add(p.id); nodes.push(p); } };
+    persons.forEach(p => { if (dist.has(p.id)) add(p); });
+    if (seed) { add(seed); [seed.father, seed.mother].forEach(id => add(byId.get(id))); }
+    const seen = new Set();
+    nodes.forEach(p => {
+      [p.father, p.mother].forEach(id => { if (id && have.has(id)) links.push({ source: id, target: p.id, t: 'p' }); });
+      (p.spouses || []).forEach(id => { const k = [p.id, id].sort().join('|'); if (have.has(id) && !seen.has(k)) { seen.add(k); links.push({ source: p.id, target: id, t: 's' }); } });
+    });
+    const isSeedLine = p => p.id === data.seed || (seed && (p.id === seed.father || p.id === seed.mother));
+    const cls = p => isSeedLine(p) ? 'seed' : anc.has(p.id) ? 'c1' : 'c3';
+    const labelled = p => isSeedLine(p) || (anc.has(p.id) && anc.get(p.id) <= 3);
+    document.getElementById('net-hint').textContent =
+      `${nodes.length} people shown (your ancestors and everyone within ${HOPS} steps of them), ${links.filter(l => l.t === 'p').length} parent links, ${links.filter(l => l.t === 's').length} marriages. Drag to rearrange, scroll to zoom.`;
+    const svgEl = document.querySelector('#net svg');
+    const svg = d3.select(svgEl);
+    const bbox = svgEl.getBoundingClientRect();
+    const W = Math.max(320, bbox.width), H = Math.max(320, bbox.height);
+    svg.attr('viewBox', `0 0 ${W} ${H}`);
+    const root = svg.append('g');
+    const zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', e => root.attr('transform', e.transform));
+    svg.call(zoom);
+    let fits = 0;
+    const fit = () => { fits++;
+      const xs = nodes.map(d => d.x), ys = nodes.map(d => d.y);
+      const x0 = d3.min(xs) - 60, x1 = d3.max(xs) + 60, y0 = d3.min(ys) - 40, y1 = d3.max(ys) + 40;
+      const k = Math.min(1.6, 0.92 / Math.max((x1 - x0) / W, (y1 - y0) / H));
+      svg.call(zoom.transform, d3.zoomIdentity.translate(W / 2 - k * (x0 + x1) / 2, H / 2 - k * (y0 + y1) / 2).scale(k)); };
+    const sim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(l => l.t === 's' ? 14 : 22).strength(l => l.t === 's' ? 0.9 : 0.5))
+      .force('charge', d3.forceManyBody().strength(-38))
+      .force('center', d3.forceCenter(W / 2, H / 2))
+      .force('collide', d3.forceCollide(9))
+      .force('x', d3.forceX(W / 2).strength(0.03)).force('y', d3.forceY(H / 2).strength(0.03));
+    const link = root.append('g').selectAll('line').data(links).join('line').attr('class', d => d.t === 'p' ? 'plink' : 'slink');
+    const node = root.append('g').selectAll('circle').data(nodes).join('circle')
+      .attr('class', d => 'node ' + cls(d)).attr('r', d => isSeedLine(d) ? 8 : anc.has(d.id) ? 6 : 4.5)
+      .call(d3.drag().on('start', (e, d) => { sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; }).on('end', (e, d) => { sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+    const label = root.append('g').selectAll('text').data(nodes.filter(labelled)).join('text').attr('class', 'lbl')
+      .attr('dy', -11).attr('text-anchor', 'middle').text(d => d.name + (year(d.birth) ? ` (${year(d.birth)})` : ''));
+    const tip = document.getElementById('tip');
+    node.on('pointerenter', (e, d) => {
+      const dates = [year(d.birth), year(d.death)].filter(Boolean).join(' to ');
+      const r = rel[d.id];
+      tip.innerHTML = `<b>${esc(d.name)}</b>${dates ? ` <span class="m">${esc(dates)}</span>` : ''}` +
+        (d.birthPlace ? `<br><span class="m">b. ${esc(d.birthPlace)}</span>` : '') +
+        (r ? `<br><b>${esc(r.label)}</b> of ${esc(seed ? seed.name : 'seed')}` : '') +
+        `<br><span class="mono">${esc(d.id)} · ${esc((d.sources || []).join(', '))}</span>`;
+      tip.style.display = 'block';
+    }).on('pointermove', e => { const box = svgEl.getBoundingClientRect(); tip.style.left = Math.min(e.clientX - box.left + 14, box.width - 310) + 'px'; tip.style.top = (e.clientY - box.top + 14) + 'px'; })
+      .on('pointerleave', () => { tip.style.display = 'none'; })
+      .on('click', (e, d) => { if (d.url) window.open(d.url, '_blank', 'noopener'); });
+    sim.on('tick', () => {
+      if (fits === 0 && sim.alpha() < 0.05) fit();
+      link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      node.attr('cx', d => d.x).attr('cy', d => d.y);
+      label.attr('x', d => d.x).attr('y', d => d.y);
+    }).on('end', () => { if (fits < 2) fit(); });
+  })();
+
+  // tables
+  const LIMIT = 40;
+  const collapsible = (el, rowsHtml, total) => {
+    el.innerHTML = rowsHtml;
+    if (total > LIMIT) {
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'more'; btn.textContent = `Show all ${fmt(total)} rows`;
+      btn.addEventListener('click', () => { el.querySelectorAll('tr.extra').forEach(tr => { tr.hidden = false; }); btn.remove(); });
+      el.appendChild(btn);
+    }
+  };
+  const srcLinks = p => {
+    const out = [];
+    if (p.wikitree) out.push(`<a href="https://www.wikitree.com/wiki/${esc(p.wikitree)}" target="_blank" rel="noopener">WikiTree</a>`);
+    if (p.url && /familysearch/.test(p.url)) out.push(`<a href="${esc(p.url)}" target="_blank" rel="noopener">FamilySearch</a>`);
+    if (p.url && /eggsa/.test(p.url)) out.push(`<a href="${esc(p.url)}" target="_blank" rel="noopener">Gravestone</a>`);
+    return out.join(' · ');
+  };
+  const place = s => (s || '').replace(/, (South Africa|England|United Kingdom)$/, '');
+
+  collapsible(document.getElementById('table-anc'),
+    `<table><thead><tr><th class="num">Gen.</th><th>Name</th><th>Relation</th><th>Born</th><th>Died</th><th>Known from</th><th>Records</th></tr></thead><tbody>` +
+    ancestors.map((a, i) => `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="num">${a.g}</td><td>${esc(a.p.name)}</td><td>${esc(rel[a.p.id] ? rel[a.p.id].label : genLabel(a.g))}</td><td>${esc(year(a.p.birth))}${a.p.birthPlace ? `<br><span class="hint">${esc(place(a.p.birthPlace))}</span>` : ''}</td><td>${esc(year(a.p.death))}${a.p.deathPlace ? `<br><span class="hint">${esc(place(a.p.deathPlace))}</span>` : ''}</td><td>${pill(a.p)}</td><td>${srcLinks(a.p)}</td></tr>`).join('') +
+    '</tbody></table>', ancestors.length);
+
+  const ancestorsOf = id => { const out = new Set(); const q = [id]; while (q.length) { const p = byId.get(q.pop()); if (!p) continue; [p.father, p.mother].forEach(a => { if (a && !out.has(a)) { out.add(a); q.push(a); } }); } return out; };
+  const flagsFor = p => siteFlags.filter(f => (f.descendantsOf && (p.id === f.descendantsOf || ancestorsOf(p.id).has(f.descendantsOf))) || (f.re && f.re.test(p.given || p.name || '')))
+    .map(f => `<span class="pill${f.style ? ' ' + esc(f.style) : ''}">${esc(f.label)}</span>`).join(' ');
+  document.getElementById('sa-flags-note').textContent = site.flagsNote || '';
+  document.getElementById('sa-title').textContent = 'South African ' + familyLabel + ' records';
+  const saRows = persons.filter(p => isFamily(p) && p.id !== data.seed && !p.id.startsWith('seed:') && (isSA(p) || hasSrc(p, 'eggsa')))
+    .sort((a, b) => (year(a.birth) || '9999').localeCompare(year(b.birth) || '9999') || (a.name || '').localeCompare(b.name || ''));
+  if (saRows.length) collapsible(document.getElementById('table-sa'),
+    `<table><thead><tr><th>Name</th><th class="num">Born</th><th class="num">Died</th><th>Place</th><th>Relation</th>${siteFlags.length ? '<th>Flags</th>' : ''}<th>Records</th></tr></thead><tbody>` +
+    saRows.map((p, i) => {
+      const pl = p.birthPlace || (p.deathPlace ? 'buried ' + place(p.deathPlace) : '');
+      const r = rel[p.id];
+      return `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td>${esc(p.name)}</td><td class="num">${esc(year(p.birth))}</td><td class="num">${esc(year(p.death))}</td><td>${esc(pl)}</td><td>${r ? esc(r.label) : comps[p.id] === seedComp ? 'in your network' : ''}</td>${siteFlags.length ? `<td>${flagsFor(p)}</td>` : ''}<td>${srcLinks(p)}</td></tr>`;
+    }).join('') + '</tbody></table>', saRows.length);
+  else document.getElementById('table-sa').innerHTML = '<p class="sub">No South African records loaded.</p>';
+
+  if (records.length) {
+    document.getElementById('sec-records').hidden = false;
+    document.getElementById('table-records').innerHTML =
+      `<table><thead><tr><th class="num">Date</th><th>Event</th><th>People</th><th>Place</th><th>What it shows</th><th>Source</th></tr></thead><tbody>` +
+      records.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(r => {
+        const who = byId.get(r.person);
+        return `<tr><td class="num">${esc(r.date || '')}</td><td>${esc(r.event || '')}</td><td>${esc(r.names || (who ? who.name : ''))}</td><td>${esc(r.place || '')}</td><td>${esc(r.detail || '')}${r.image ? `<br><span class="mono">${esc(r.image)}</span>` : ''}</td><td><a href="${esc(r.url)}" target="_blank" rel="noopener">FamilySearch</a><br><span class="hint">${esc(r.collection || '')}</span></td></tr>`;
+      }).join('') + '</tbody></table>';
+  }
+
+  if (notices.length) {
+    document.getElementById('sec-notices').hidden = false;
+    document.getElementById('notices-title').textContent = familyLabel + ' notices in South African newspapers';
+    const paperName = s => s.replace(/-sp-\d+$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(/^Eph$/, 'Eastern Province Herald');
+    const yearOf = n => (n.page.match(/\b(1[6-9]\d\d|20\d\d)\b/) || [''])[0];
+    const rows = notices.slice().sort((a, b) => (yearOf(a) || '9999').localeCompare(yearOf(b) || '9999'));
+    document.getElementById('table-notices').innerHTML =
+      `<table><thead><tr><th class="num">Year</th><th>Paper</th><th>Notice</th></tr></thead><tbody>` +
+      rows.map(n => `<tr><td class="num">${esc(yearOf(n))}</td><td><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(paperName(n.paper))}</a></td><td>${esc(n.text)}</td></tr>`).join('') + '</tbody></table>';
+  }
+
+  // open questions: dead ends within four generations, nearest first, plus probable steps
+  const ends = ancestors.filter(a => a.g <= 4 && !(a.p.father && byId.has(a.p.father)) && !(a.p.mother && byId.has(a.p.mother)));
+  const probs = ancestors.filter(a => probable.has(a.p.id) && !(a.p.father && probable.has(a.p.father)) && !(a.p.mother && probable.has(a.p.mother)));
+  const steps = [];
+  ends.forEach(a => steps.push(`<strong>${esc(a.p.name)}</strong> (${esc(genLabel(a.g))}${year(a.p.birth) ? ', born ' + esc(year(a.p.birth)) : ''}): parents not yet named in any record.`));
+  probs.forEach(a => steps.push(`<strong>${esc(a.p.name)}</strong> and the generations above rest on a match of name and date, not on a record naming the parent.`));
+  document.getElementById('steps').innerHTML = steps.length ? steps.map(s => `<li>${s}</li>`).join('') : '<li>No gaps within four generations.</li>';
+
+  const counts = ['wikitree', 'eggsa', 'familysearch'].map(s => `${fmt(persons.filter(p => hasSrc(p, s)).length)} from ${({wikitree:'WikiTree', eggsa:'eGGSA graves', familysearch:'FamilySearch records'})[s]}`).join(', ');
+  document.getElementById('foot').textContent =
+    `Graph of ${fmt(persons.length)} people: ${counts}. Generated by the kin toolkit from public records; living people appear only where those sources already publish them or where the family supplied them.`;
+})();
+</script>

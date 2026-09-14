@@ -1,0 +1,45 @@
+{
+  "persons": {
+    "seed:me": {
+      "id": "seed:me", "name": "Alex Smith", "given": "Alex", "surname": "Smith", "gender": "male",
+      "birth": "1980-05-12", "birthPlace": "Cape Town, Western Cape, South Africa",
+      "father": "seed:father", "mother": "seed:mother", "living": true, "sources": ["user"],
+      "note": "Seed person. Every relationship label on the page is computed from here."
+    },
+    "seed:father": {
+      "id": "seed:father", "name": "John Smith", "given": "John", "surname": "Smith", "gender": "male",
+      "birth": "1950-02-03", "birthPlace": "Port Elizabeth, Eastern Cape, South Africa",
+      "father": "seed:ff", "mother": "seed:fm", "spouses": ["seed:mother"], "living": true, "sources": ["user"]
+    },
+    "seed:mother": {
+      "id": "seed:mother", "name": "Mary Jones (Smith)", "given": "Mary", "surname": "Jones", "gender": "female",
+      "birth": "1952-11-20", "birthPlace": "Durban, KwaZulu-Natal, South Africa",
+      "father": "seed:mf", "mother": "seed:mm", "spouses": ["seed:father"], "living": true, "sources": ["user"]
+    },
+    "seed:ff": {
+      "id": "seed:ff", "name": "William Smith", "given": "William", "surname": "Smith", "gender": "male",
+      "birth": "1920-07-01", "birthPlace": "Portsmouth, Hampshire, England",
+      "death": "1990-03-15", "deathPlace": "Port Elizabeth, Eastern Cape, South Africa",
+      "spouses": ["seed:fm"], "occupations": ["fitter"], "sources": ["user"],
+      "note": "Emigrated to South Africa in 1947 (family story; ship's list not yet found)."
+    },
+    "seed:fm": {
+      "id": "seed:fm", "name": "Anna Botha (Smith)", "given": "Anna", "surname": "Botha", "gender": "female",
+      "birth": "1923-09-09", "birthPlace": "Graaff-Reinet, Eastern Cape, South Africa",
+      "death": "1999-12-01", "deathPlace": "Port Elizabeth, Eastern Cape, South Africa",
+      "spouses": ["seed:ff"], "sources": ["user"]
+    },
+    "seed:mf": {
+      "id": "seed:mf", "name": "Peter Jones", "given": "Peter", "surname": "Jones", "gender": "male",
+      "birth": "1925-04-18", "birthPlace": "Cardiff, Wales",
+      "death": "1988-06-30", "deathPlace": "Durban, KwaZulu-Natal, South Africa",
+      "spouses": ["seed:mm"], "occupations": ["railway clerk"], "sources": ["user"]
+    },
+    "seed:mm": {
+      "id": "seed:mm", "name": "Elizabeth Brown (Jones)", "given": "Elizabeth", "surname": "Brown", "gender": "female",
+      "birth": "1928-01-25", "birthPlace": "Pietermaritzburg, KwaZulu-Natal, South Africa",
+      "death": "2005-08-08", "deathPlace": "Durban, KwaZulu-Natal, South Africa",
+      "spouses": ["seed:mf"], "sources": ["user"]
+    }
+  }
+}
