@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/richardwooding/kin/internal/eggsa"
 	"github.com/richardwooding/kin/internal/graph"
@@ -64,6 +65,7 @@ func usage() {
   viz                -graph data/graph.json -seed seed:me [-site site.json] [-notices data/papers.json] [-records records.json] [-probable wt:X] [-tree-url URL] -out dist/index.html
   tree               -graph data/graph.json -root seed:me [-reader seed:me] [-gen 20] [-site site.json] [-records records.json] [-probable wt:X] [-dashboard-url URL] -out dist/tree.html   (pan-and-zoom pedigree)
   naairs             -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932] [-out data/naairs_smith.json]   (National Archives of South Africa index)
+  naairs sweep       -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume] -out data/naairs_sweep.json   (score index hits for every ancestor)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
   version            print the version, commit and build date
 `)
@@ -761,6 +763,10 @@ func cmdReport(args []string) {
 // ---------------------------------------------------------------- naairs
 
 func cmdNaairs(ctx context.Context, args []string) {
+	if len(args) > 0 && args[0] == "sweep" {
+		cmdNaairsSweep(ctx, args[1:])
+		return
+	}
 	fs := flag.NewFlagSet("naairs", flag.ExitOnError)
 	db := fs.String("db", "RSA", "repository code: RSA (all), TAB, KAB, NAB, VAB, TBD, TBE, TBK, SAB, GEN")
 	q := fs.String("q", "", "search words, ANDed (e.g. \"SMITH JOHN HENRY\")")
@@ -781,4 +787,85 @@ func cmdNaairs(ctx context.Context, args []string) {
 		b, _ := json.MarshalIndent(recs, "", "  ")
 		die(os.WriteFile(*out, b, 0o644))
 	}
+}
+
+// cmdNaairsSweep queries the archives index once per documented ancestor and
+// writes scored candidates, saving after every person so a run can resume.
+func cmdNaairsSweep(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("naairs sweep", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	from := fs.String("from", "", "person whose ancestors are swept (required)")
+	gen := fs.Int("gen", 20, "generations above -from")
+	db := fs.String("db", "RSA", "repository code (RSA = all)")
+	delay := fs.Duration("delay", 3*time.Second, "pause between queries")
+	resume := fs.Bool("resume", false, "skip persons already in -out")
+	out := fs.String("out", "data/naairs_sweep.json", "results json")
+	fs.Parse(args)
+	need("from", *from)
+	g, err := model.Load(*gp)
+	die(err)
+	root := g.Resolve(*from)
+	anc := graph.Ancestors(g, root)
+	delete(anc, root)
+	var ids []string
+	for id, d := range anc {
+		if p := g.Persons[id]; p != nil && d <= *gen && !p.Living {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		if anc[ids[i]] != anc[ids[j]] {
+			return anc[ids[i]] < anc[ids[j]]
+		}
+		return ids[i] < ids[j]
+	})
+	results := map[string]naairs.SweepResult{}
+	if *resume {
+		if b, err := os.ReadFile(*out); err == nil {
+			var prev []naairs.SweepResult
+			if json.Unmarshal(b, &prev) == nil {
+				for _, r := range prev {
+					if r.Err == "" {
+						results[r.ID] = r
+					}
+				}
+			}
+		}
+	}
+	var todo []string
+	for _, id := range ids {
+		if _, done := results[id]; !done {
+			todo = append(todo, id)
+		}
+	}
+	logf("naairs sweep: %d ancestors, %d to query (%s)", len(ids), len(todo), *db)
+	save := func() {
+		list := make([]naairs.SweepResult, 0, len(results))
+		for _, id := range ids {
+			if r, ok := results[id]; ok {
+				list = append(list, r)
+			}
+		}
+		b, _ := json.MarshalIndent(list, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+	}
+	done := 0
+	naairs.New().Sweep(ctx, *db, g, todo, *delay, func(r naairs.SweepResult) {
+		done++
+		results[r.ID] = r
+		save()
+		if r.Err != "" {
+			logf("[%d/%d] %s: error %s", done, len(todo), r.Name, r.Err)
+			return
+		}
+		logf("[%d/%d] %s (%s-%s): %d documents, %d candidates", done, len(todo), r.Name, model.Year(r.Birth), model.Year(r.Death), r.Total, len(r.Hits))
+		for i, h := range r.Hits {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("  %d  %s %s %s  %s [%s]  %s\n", h.Score, h.Depot, h.Source, h.Reference, h.Description, model.Year(h.Starting), strings.Join(h.Why, ", "))
+		}
+	})
+	logf("naairs sweep: wrote %s", *out)
 }
