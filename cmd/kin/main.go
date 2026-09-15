@@ -799,6 +799,7 @@ func cmdNaairsSweep(ctx context.Context, args []string) {
 	db := fs.String("db", "RSA", "repository code (RSA = all)")
 	delay := fs.Duration("delay", 3*time.Second, "pause between queries")
 	resume := fs.Bool("resume", false, "skip persons already in -out")
+	redoCapped := fs.Bool("redo-capped", false, "with -resume: query again the persons whose earlier result hit the detail cap without a death-year pass")
 	out := fs.String("out", "data/naairs_sweep.json", "results json")
 	fs.Parse(args)
 	need("from", *from)
@@ -825,9 +826,13 @@ func cmdNaairsSweep(ctx context.Context, args []string) {
 			var prev []naairs.SweepResult
 			if json.Unmarshal(b, &prev) == nil {
 				for _, r := range prev {
-					if r.Err == "" {
-						results[r.ID] = r
+					if r.Err != "" {
+						continue
 					}
+					if *redoCapped && r.Total > 130 && !r.Capped && model.Year(r.Death) != "" {
+						continue
+					}
+					results[r.ID] = r
 				}
 			}
 		}

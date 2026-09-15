@@ -19,15 +19,16 @@ type Candidate struct {
 
 // SweepResult holds the scored hits for one person.
 type SweepResult struct {
-	ID    string      `json:"id"`
-	Name  string      `json:"name"`
-	Birth string      `json:"birth,omitempty"`
-	Death string      `json:"death,omitempty"`
-	Query []string    `json:"query"`
-	Total int         `json:"total"` // documents the index reported
-	Hits  []Candidate `json:"hits"`
-	Raw   []Record    `json:"raw,omitempty"` // every fetched record, so scoring can be redone offline
-	Err   string      `json:"err,omitempty"`
+	ID     string      `json:"id"`
+	Name   string      `json:"name"`
+	Birth  string      `json:"birth,omitempty"`
+	Death  string      `json:"death,omitempty"`
+	Query  []string    `json:"query"`
+	Total  int         `json:"total"`            // documents the index reported
+	Capped bool        `json:"capped,omitempty"` // a query exceeded the detail cap and was re-run around the death year
+	Hits   []Candidate `json:"hits"`
+	Raw    []Record    `json:"raw,omitempty"` // every fetched record, so scoring can be redone offline
+	Err    string      `json:"err,omitempty"`
 }
 
 // Terms builds the AND-ed keywords for a person: every surname token plus the
@@ -178,6 +179,16 @@ func (c *Client) SweepPerson(ctx context.Context, db string, g *model.Graph, p *
 	}
 	seen := map[string]bool{}
 	var recs []Record
+	add := func(rs []Record) {
+		for _, r := range rs {
+			k := r.Depot + "|" + r.Source + "|" + r.Volume + "|" + r.Reference
+			if !seen[k] {
+				seen[k] = true
+				recs = append(recs, r)
+			}
+		}
+	}
+	death := yearOf(p.Death)
 	for i, q := range queries {
 		if i > 0 {
 			time.Sleep(time.Second)
@@ -188,11 +199,16 @@ func (c *Client) SweepPerson(ctx context.Context, db string, g *model.Graph, p *
 			res.Err = err.Error()
 			return res
 		}
-		for _, r := range rs {
-			k := r.Depot + "|" + r.Source + "|" + r.Volume + "|" + r.Reference
-			if !seen[k] {
-				seen[k] = true
-				recs = append(recs, r)
+		add(rs)
+		// a common name returns more documents than the client fetches in
+		// detail; when the death year is known, look again in the years around
+		// it so the estate is not lost beyond the cap
+		if n > maxDocs && death > 0 {
+			time.Sleep(time.Second)
+			rs2, _, err := c.Query(ctx, db, q, strconv.Itoa(death-1), strconv.Itoa(death+2))
+			if err == nil {
+				add(rs2)
+				res.Capped = true
 			}
 		}
 	}
