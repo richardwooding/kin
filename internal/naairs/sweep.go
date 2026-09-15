@@ -26,6 +26,7 @@ type SweepResult struct {
 	Query []string    `json:"query"`
 	Total int         `json:"total"` // documents the index reported
 	Hits  []Candidate `json:"hits"`
+	Raw   []Record    `json:"raw,omitempty"` // every fetched record, so scoring can be redone offline
 	Err   string      `json:"err,omitempty"`
 }
 
@@ -86,6 +87,10 @@ func Score(p *model.Person, r Record, spouseSurnames []string) (int, []string) {
 	if !has(given) || (!maiden && married == "") {
 		return 0, nil
 	}
+	// "BORN X" / "NEE X" / "GEBORE X" naming another maiden surname means another woman
+	if born := bornSurname(r.Description + " " + r.Remarks); born != "" && !matchWord([]string{born}, terms[len(terms)-2]) && !maiden {
+		return 0, nil
+	}
 	score, why := 1, []string{"name"}
 	if maiden && married != "" {
 		score += 2
@@ -106,10 +111,12 @@ func Score(p *model.Person, r Record, spouseSurnames []string) (int, []string) {
 	}
 	st := yearOf(r.Starting)
 	birth, death := yearOf(p.Birth), yearOf(p.Death)
+	yearHit, ownName := false, false
 	switch {
 	case st == 0:
 	case death != 0 && abs(st-death) <= 2:
 		score += 2
+		yearHit = true
 		why = append(why, "year of death")
 	case death != 0 && abs(st-death) <= 10:
 		score++
@@ -121,11 +128,17 @@ func Score(p *model.Person, r Record, spouseSurnames []string) (int, []string) {
 	if r.Source == "MHG" || r.Source == "MOOC" {
 		score++
 		why = append(why, "estate file")
-		head := tokens(strings.SplitN(r.Description, ",", 2)[0])
-		if len(head) > 0 && (matchWord(head, terms[len(terms)-2]) || (married != "" && matchWord(head, married))) {
+		head := tokens(strings.SplitN(r.Description, ".", 2)[0])
+		if len(head) > 0 && matchWord(head, given) && (matchWord(head, terms[len(terms)-2]) || (married != "" && matchWord(head, married))) {
 			score++
+			ownName = true
 			why = append(why, "estate in this name")
 		}
+	}
+	// a married-name match alone is weak: another person's file that mentions
+	// the wife, or a namesake, unless the file is in her name or dated at her death
+	if !maiden && !ownName && !yearHit {
+		score = min(score, 1)
 	}
 	return score, why
 }
@@ -183,6 +196,7 @@ func (c *Client) SweepPerson(ctx context.Context, db string, g *model.Graph, p *
 			}
 		}
 	}
+	res.Raw = recs
 	for _, r := range recs {
 		if sc, why := Score(p, r, spouses); sc >= 2 {
 			res.Hits = append(res.Hits, Candidate{Record: r, Score: sc, Why: why})
@@ -284,4 +298,19 @@ func matchWord(words []string, term string) bool {
 		}
 	}
 	return false
+}
+
+// bornSurname returns the maiden surname a description gives after BORN, NEE,
+// GEBORE or NOOIENSVAN, or "" when there is none.
+func bornSurname(text string) string {
+	w := tokens(text)
+	for i, t := range w {
+		switch t {
+		case "BORN", "NEE", "GEBORE", "NOOIENSVAN", "GEB":
+			if i+1 < len(w) {
+				return w[i+1]
+			}
+		}
+	}
+	return ""
 }

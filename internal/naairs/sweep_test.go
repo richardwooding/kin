@@ -61,3 +61,19 @@ func TestLoose(t *testing.T) {
 		t.Error("unrelated word matched")
 	}
 }
+
+func TestScoreRejectsOtherMaidenName(t *testing.T) {
+	kathleen := &model.Person{ID: "k", Given: "Kathleen Florence", Surname: "Clegg", Birth: "1923"}
+	other := Record{Depot: "TAB", Source: "MHG", Description: "MARAIS, KATHLEEN THERESE. BORN ROHAN.", Starting: "19430000"}
+	if sc, why := Score(kathleen, other, []string{"MARAIS"}); sc != 0 {
+		t.Errorf("another woman's estate scored %d (%v)", sc, why)
+	}
+	own := Record{Depot: "TAB", Source: "MHG", Description: "MARAIS, KATHLEEN FLORENCE. BORN CLEGG.", Starting: "19990000"}
+	if sc, _ := Score(kathleen, own, []string{"MARAIS"}); sc < 5 {
+		t.Errorf("her own estate scored only %d", sc)
+	}
+	stranger := Record{Depot: "TAB", Source: "MHG", Description: "MARAIS, ABRAHAM JOHANNES.", Remarks: "SURVIVING SPOUSE KATHLEEN MARAIS", Starting: "19550000"}
+	if sc, _ := Score(kathleen, stranger, []string{"MARAIS"}); sc >= 2 {
+		t.Errorf("a stranger's estate that merely mentions a Kathleen scored %d", sc)
+	}
+}
