@@ -1,0 +1,319 @@
+<title>Kin · Map</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f3f4f6;  --surface: #fcfcfb;  --ink: #0b0b0b;  --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9;     --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s3: #1baf7a; --warn: #8a6508; --s4: #8b3fbf;
+    --sea: #e7ebef; --land: #f7f6f2; --border: #cfcdc4;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+      --s1: #3987e5; --s3: #199e70; --warn: #d9a441; --s4: #a86ad6;
+      --sea: #101214; --land: #1d1e1c; --border: #33342f;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s3: #199e70; --warn: #d9a441; --s4: #a86ad6;
+    --sea: #101214; --land: #1d1e1c; --border: #33342f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { background: var(--sea); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+  svg#map { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; background: var(--sea); }
+  svg#map:active { cursor: grabbing; }
+  .card { background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid var(--ring); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  .hud { position: fixed; top: 12px; left: 12px; max-width: 460px; padding: 12px 14px; display: grid; gap: 6px; z-index: 2; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .hud h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; margin: 0; line-height: 1.15; }
+  .hud .sub { font-size: 13px; color: var(--ink-2); margin: 0; }
+  .hud a, .panel a { color: var(--s1); text-decoration-color: currentColor; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: inherit; font-size: 12.5px; padding: 4px 9px; border: 1px solid var(--ring); border-radius: 999px; background: var(--surface); color: var(--ink-2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .chip.off { opacity: 0.45; }
+  .toolbar { position: fixed; top: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; z-index: 2; padding: 8px; }
+  .toolbar button { font: inherit; font-size: 14px; line-height: 1; height: 34px; padding: 0 10px; border: 1px solid var(--ring); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; }
+  .toolbar button.on { border-color: var(--s1); color: var(--s1); }
+  .search { position: relative; }
+  .search input { font: inherit; font-size: 14px; height: 34px; width: 200px; padding: 0 10px; border: 1px solid var(--ring); border-radius: 6px; background: var(--surface); color: var(--ink); }
+  .results { position: absolute; right: 0; top: 38px; width: 320px; margin: 0; padding: 4px; list-style: none; display: none; max-height: 320px; overflow-y: auto; }
+  .results.show { display: block; }
+  .results li { padding: 6px 8px; border-radius: 4px; cursor: pointer; display: grid; gap: 1px; }
+  .results li:hover, .results li.active { background: var(--grid); }
+  .results .n { font-size: 12px; color: var(--ink-2); }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 100vw; padding: 18px 20px 28px; overflow-y: auto; background: var(--surface); border-left: 1px solid var(--ring); transform: translateX(100%); transition: transform 0.25s ease; z-index: 3; }
+  .panel.open { transform: none; box-shadow: -8px 0 24px rgba(0,0,0,0.12); }
+  .panel .close { position: absolute; top: 10px; right: 12px; font: inherit; font-size: 18px; line-height: 1; width: 32px; height: 32px; border: 1px solid var(--ring); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; }
+  .panel h2 { font-size: 19px; font-weight: 600; margin: 6px 40px 2px 0; line-height: 1.2; }
+  .panel .sub { color: var(--ink-2); margin: 0 0 12px; font-size: 13px; }
+  .panel h3 { font-size: 12px; font-family: var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+  .panel ul { margin: 0; padding-left: 0; list-style: none; font-size: 13.5px; }
+  .panel li { padding: 5px 0; border-bottom: 1px solid var(--grid); display: grid; grid-template-columns: 10px 1fr; gap: 8px; align-items: start; }
+  .panel li .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
+  .panel li button { font: inherit; text-align: left; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; }
+  .panel li button:hover { color: var(--s1); }
+  .panel li .meta { font-size: 12px; color: var(--ink-2); display: block; }
+  .panel .note { font-size: 12.5px; color: var(--ink-2); }
+  .foot { position: fixed; left: 12px; bottom: 12px; margin: 0; font-size: 12px; color: var(--muted); max-width: 70ch; z-index: 2; }
+  .tip { position: fixed; pointer-events: none; padding: 6px 9px; font-size: 12.5px; z-index: 4; display: none; max-width: 300px; }
+  path.land { fill: var(--land); stroke: none; }
+  path.border { fill: none; stroke: var(--border); }
+  path.arc { fill: none; stroke-opacity: 0.45; }
+  circle.pin { stroke: var(--surface); fill-opacity: 0.85; cursor: pointer; }
+  circle.pin.region { fill-opacity: 0.55; }
+  circle.pin.country { fill: none; stroke-dasharray: 3 2; fill-opacity: 0; }
+  circle.pin.hit { stroke: var(--ink); }
+  text.plabel { font-family: var(--sans); font-weight: 500; fill: var(--ink); paint-order: stroke; stroke: var(--sea); stroke-linejoin: round; pointer-events: none; }
+  @media (max-width: 700px) {
+    .hud { max-width: calc(100vw - 24px); }
+    .hud .sub, .hud .chips { display: none; }
+    .toolbar { top: auto; bottom: 12px; left: 12px; right: 12px; }
+    .search input { width: 130px; }
+    .results { right: auto; left: 0; top: auto; bottom: 40px; width: min(320px, calc(100vw - 40px)); }
+    .panel { top: auto; left: 0; right: 0; width: auto; max-height: 60vh; transform: translateY(100%); border-left: 0; border-top: 1px solid var(--ring); border-radius: 12px 12px 0 0; padding-bottom: 80px; }
+    .panel.open { transform: none; }
+    .foot { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  #tip .now { color: var(--muted); font-weight: 400; }
+</style>
+
+<svg id="map" role="img" aria-label="Map of ancestors' birth and death places"><g id="root"><g class="land"></g><g class="arcs"></g><g class="pins"></g><g class="labels"></g></g></svg>
+<div class="hud card">
+  <div class="eyebrow" id="eyebrow">Family history · public records</div>
+  <h1 id="title">Kin</h1>
+  <p class="sub" id="sub"></p>
+  <div class="chips" id="chips"></div>
+</div>
+<div class="toolbar card" role="toolbar" aria-label="Map controls">
+  <button id="fit-all" title="Fit every located place">All</button>
+  <button id="fit-sa" title="Southern Africa">Cape</button>
+  <button id="fit-eu" title="Europe">Europe</button>
+  <button id="arcs" class="on" title="Show journeys from birthplace to place of death">Journeys</button>
+  <div class="search"><input id="q" type="search" placeholder="Find a person or place (/)" autocomplete="off" aria-label="Find a person or place"><ul class="results card" id="results" role="listbox"></ul></div>
+</div>
+<aside class="panel" id="panel" aria-hidden="true"></aside>
+<div class="tip card" id="tip"></div>
+<p class="foot" id="foot"></p>
+
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script id="world" type="application/json">/*__WORLD__*/</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById('data').textContent);
+  const site = data.site || {};
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const year = s => (s || '').slice(0, 4).replace(/\D/g, '');
+  const years = p => { const b = year(p.birth), d = year(p.death); return b || d ? `${b || '?'}–${d || ''}`.replace(/–$/, '') : ''; };
+  const norm = s => (s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  const fmt = n => n.toLocaleString('en-GB');
+  document.title = (site.title || 'Kin') + ' · Map';
+  document.getElementById('title').textContent = site.title || 'Kin';
+  document.getElementById('eyebrow').textContent = site.eyebrow || 'Family history · public records';
+  const sub = document.getElementById('sub');
+  if (typeof d3 === 'undefined' || typeof topojson === 'undefined') { sub.textContent = 'The map libraries could not be loaded (network blocked?).'; return; }
+
+  const persons = data.persons || [], places = data.places || [];
+  const byId = new Map(persons.map(p => [p.id, p]));
+  const LINE = ['var(--s1)', 'var(--s3)', 'var(--warn)', 'var(--s4)'];
+  const lineColour = l => l >= 0 ? LINE[l] : 'var(--muted)';
+  const located = persons.filter(p => p.n !== 1 && (p.birthAt >= 0 || p.deathAt >= 0)).length;
+  const clauses = [`${fmt(located)} of ${fmt(persons.length - 1)} ancestors placed on ${fmt(places.length)} locations`];
+  if (data.unplaced && data.unplaced.length) clauses.push(`${data.unplaced.length} place names not located`);
+  clauses.push(`relationships relative to ${data.readerName}`);
+  const links = [data.dashboardUrl ? `<a href="${esc(data.dashboardUrl)}" target="_blank" rel="noopener">dashboard &rarr;</a>` : '', data.treeUrl ? `<a href="${esc(data.treeUrl)}" target="_blank" rel="noopener">family tree &rarr;</a>` : ''].filter(Boolean).join(' · ');
+  sub.innerHTML = esc(clauses.join(' · ')) + (links ? ' · ' + links : '');
+  document.getElementById('foot').textContent = `Generated ${data.generated} by the kin toolkit. Pins are birthplaces and places of death; hollow pins mark a country or region only. Drag to pan, scroll or pinch to zoom, click a pin for the people.`;
+
+  // line filter chips
+  const lineOn = [true, true, true, true, true]; // index 4 = root and parents
+  const chips = document.getElementById('chips');
+  const chipDefs = (data.lines || []).map((n, i) => ({ i, label: n, colour: LINE[i] })).concat([{ i: 4, label: 'you and your parents', colour: 'var(--muted)' }]);
+  chips.innerHTML = chipDefs.map(c => `<button class="chip" data-i="${c.i}" title="Toggle this line"><span class="dot" style="background:${c.colour}"></span>${esc(c.label)}</button>`).join('');
+  chips.querySelectorAll('.chip').forEach(b => b.onclick = () => { const i = +b.dataset.i; lineOn[i] = !lineOn[i]; b.classList.toggle('off', !lineOn[i]); render(); });
+  const lineIdx = p => p.line >= 0 ? p.line : 4;
+  const visible = p => lineOn[lineIdx(p)];
+
+  // map
+  const svg = d3.select('#map'), root = svg.select('#root'), svgEl = svg.node();
+  const size = () => { const r = svgEl.getBoundingClientRect(); return { W: Math.max(320, r.width), H: Math.max(320, r.height) }; };
+  const world = JSON.parse(document.getElementById('world').textContent);
+  const land = topojson.feature(world, world.objects.land);
+  const borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+  const projection = d3.geoMercator();
+  const path = d3.geoPath(projection);
+  let k = 1;
+  let cur = size();
+  const setup = () => {
+    cur = size();
+    const { W, H } = cur;
+    projection.fitExtent([[0, 0], [W, H]], { type: 'Sphere' });
+    root.select('g.land').selectAll('path').data([land]).join('path').attr('class', 'land').attr('d', path);
+    root.select('g.land').selectAll('path.border').data([borders]).join('path').attr('class', 'border').attr('d', path);
+  };
+  setup();
+
+  const DUR = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 500;
+  const zoom = d3.zoom().scaleExtent([1, 6000]).on('zoom', e => { k = e.transform.k; root.attr('transform', e.transform); restyle(); });
+  svg.call(zoom).on('dblclick.zoom', null);
+  svg.on('click', () => hidePanel());
+
+  let showArcs = true;
+  const counts = () => places.map((pl, i) => {
+    const people = [...(pl.births || []), ...(pl.deaths || [])].map(id => byId.get(id)).filter(p => p && visible(p));
+    const lines = [0, 0, 0, 0, 0];
+    people.forEach(p => lines[lineIdx(p)]++);
+    let best = -1, bestN = -1;
+    lines.forEach((n, l) => { if (n > bestN) { bestN = n; best = l; } });
+    return { i, pl, n: people.length, line: best === 4 ? -1 : best };
+  }).filter(c => c.n > 0);
+  const radius = c => 3 + 2.6 * Math.sqrt(c.n);
+  const arcData = () => showArcs ? persons.filter(p => visible(p) && p.birthAt >= 0 && p.deathAt >= 0 && p.birthAt !== p.deathAt && places[p.birthAt].precision !== 'country' && places[p.deathAt].precision !== 'country')
+    .map(p => ({ p, geo: { type: 'LineString', coordinates: [[places[p.birthAt].lon, places[p.birthAt].lat], [places[p.deathAt].lon, places[p.deathAt].lat]] } })) : [];
+
+  let current = [];
+  const render = () => {
+    current = counts();
+    root.select('g.arcs').selectAll('path.arc').data(arcData(), d => d.p.id).join('path').attr('class', 'arc').attr('d', d => path(d.geo)).attr('stroke', d => lineColour(d.p.line));
+    root.select('g.pins').selectAll('circle.pin').data(current, d => d.i).join('circle')
+      .attr('class', d => `pin ${d.pl.precision}`).attr('cx', d => projection([d.pl.lon, d.pl.lat])[0]).attr('cy', d => projection([d.pl.lon, d.pl.lat])[1])
+      .attr('fill', d => lineColour(d.line)).attr('stroke', d => d.pl.precision === 'country' ? lineColour(d.line) : 'var(--surface)')
+      .on('pointerenter', (e, d) => tip(e, `<strong>${esc(d.pl.label)}</strong>${d.pl.modern ? ` <span class="now">now ${esc(d.pl.modern)}</span>` : ''}<br>${d.pl.births.length} born, ${d.pl.deaths.length} died${d.pl.precision !== 'town' ? ` · ${d.pl.precision} only` : ''}`))
+      .on('pointermove', (e, d) => tip(e)).on('pointerleave', () => tip())
+      .on('click', (e, d) => { e.stopPropagation(); showPlace(d.i); });
+    root.select('g.labels').selectAll('text.plabel').data(current, d => d.i).join('text').attr('class', 'plabel')
+      .attr('x', d => projection([d.pl.lon, d.pl.lat])[0]).attr('y', d => projection([d.pl.lon, d.pl.lat])[1]).text(d => d.pl.label.split(',')[0]);
+    restyle();
+  };
+  const restyle = () => {
+    root.select('g.land').selectAll('path.border').attr('stroke-width', 0.7 / k);
+    root.select('g.arcs').selectAll('path.arc').attr('stroke-width', 1.2 / k);
+    root.select('g.pins').selectAll('circle.pin').attr('r', d => radius(d) / k).attr('stroke-width', 1.2 / k);
+    const many = current.length > 25;
+    root.select('g.labels').selectAll('text.plabel').attr('font-size', 11.5 / k).attr('stroke-width', 3 / k)
+      .attr('dx', d => (radius(d) + 3) / k).attr('dy', 4 / k)
+      .style('display', d => (!many || d.n >= 5 || k >= 8 || (k >= 3 && d.n >= 2)) ? null : 'none');
+  };
+
+  const tipEl = document.getElementById('tip');
+  const tip = (e, html) => { if (!e) { tipEl.style.display = 'none'; return; } if (html) tipEl.innerHTML = html; tipEl.style.display = 'block'; const { W } = size(); const x = Math.min(W - 320, e.clientX + 14); tipEl.style.left = x + 'px'; tipEl.style.top = (e.clientY + 14) + 'px'; };
+
+  const fitLonLat = (lon0, lat0, lon1, lat1, animate) => {
+    const { W, H } = size();
+    const [x0, y0] = projection([lon0, lat1]), [x1, y1] = projection([lon1, lat0]);
+    const scale = Math.min(6000, 0.85 / Math.max((x1 - x0) / (W - 24), (y1 - y0) / (H - 140)));
+    const t = d3.zoomIdentity.translate(W / 2 - scale * (x0 + x1) / 2, (H + 60) / 2 - scale * (y0 + y1) / 2).scale(scale);
+    (animate && DUR ? svg.transition().duration(DUR) : svg).call(zoom.transform, t);
+  };
+  const fitPlaces = (pred, animate) => {
+    const ps = places.filter(pl => pl.precision !== 'country' && pred(pl));
+    if (!ps.length) return;
+    fitLonLat(d3.min(ps, p => p.lon) - 0.5, d3.min(ps, p => p.lat) - 0.5, d3.max(ps, p => p.lon) + 0.5, d3.max(ps, p => p.lat) + 0.5, animate);
+  };
+  document.getElementById('fit-all').onclick = () => fitPlaces(() => true, true);
+  document.getElementById('fit-sa').onclick = () => fitPlaces(pl => pl.lat < -20 && pl.lon > 10 && pl.lon < 35, true);
+  document.getElementById('fit-eu').onclick = () => fitPlaces(pl => pl.lat > 35 && pl.lon > -12 && pl.lon < 25, true);
+  document.getElementById('arcs').onclick = e => { showArcs = !showArcs; e.currentTarget.classList.toggle('on', showArcs); render(); };
+  const flyTo = (lon, lat, scale) => { const { W, H } = size(); const [x, y] = projection([lon, lat]); const s = Math.max(scale || 60, k); (DUR ? svg.transition().duration(DUR) : svg).call(zoom.transform, d3.zoomIdentity.translate(W / 2 - s * x, (H + 60) / 2 - s * y).scale(s)); };
+
+  // panel
+  const panel = document.getElementById('panel');
+  const hidePanel = () => { panel.classList.remove('open'); panel.setAttribute('aria-hidden', 'true'); };
+  panel.addEventListener('click', e => e.stopPropagation());
+  const personRow = (id, kind) => {
+    const p = byId.get(id); if (!p) return '';
+    const other = kind === 'born' ? (p.deathAt >= 0 ? 'died ' + places[p.deathAt].label.split(',')[0] : p.deathPlace ? 'died ' + esc(p.deathPlace.split(',')[0]) : '') : (p.birthAt >= 0 ? 'born ' + places[p.birthAt].label.split(',')[0] : p.birthPlace ? 'born ' + esc(p.birthPlace.split(',')[0]) : '');
+    return `<li><span class="dot" style="background:${lineColour(p.line)}"></span><button type="button" data-goto="${esc(id)}">${esc(p.name)}<span class="meta">${esc([years(p), p.rel && p.rel !== 'self' ? p.rel : p.rel === 'self' ? 'you' : '', other].filter(Boolean).join(' · '))}</span></button></li>`;
+  };
+  const showPlace = i => {
+    const pl = places[i];
+    const sortGen = ids => ids.map(id => byId.get(id)).filter(Boolean).sort((a, b) => a.gen - b.gen || a.n - b.n);
+    let html = `<button class="close" type="button" aria-label="Close">×</button><h2>${esc(pl.label)}</h2><p class="sub">${pl.modern ? `now ${esc(pl.modern)} · ` : ''}${esc(pl.names.join(' · '))}${pl.precision !== 'town' ? ` · located to the ${pl.precision} only` : ''}</p>`;
+    if (pl.births.length) html += `<h3>Born here (${pl.births.length})</h3><ul>${sortGen(pl.births).map(p => personRow(p.id, 'born')).join('')}</ul>`;
+    if (pl.deaths.length) html += `<h3>Died here (${pl.deaths.length})</h3><ul>${sortGen(pl.deaths).map(p => personRow(p.id, 'died')).join('')}</ul>`;
+    panel.innerHTML = html; panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false'); panel.scrollTop = 0;
+    panel.querySelector('.close').onclick = hidePanel;
+    panel.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => showPerson(b.dataset.goto));
+    root.selectAll('circle.pin').classed('hit', d => d.i === i);
+  };
+  const showPerson = id => {
+    const p = byId.get(id); if (!p) return;
+    let html = `<button class="close" type="button" aria-label="Close">×</button><h2>${esc(p.name)}</h2><p class="sub">${esc([years(p), p.rel === 'self' ? 'you' : p.rel, `#${p.n}`].filter(Boolean).join(' · '))}</p><ul>`;
+    if (p.birthPlace) html += `<li><span class="dot" style="background:${lineColour(p.line)}"></span>${p.birthAt >= 0 ? `<button type="button" data-place="${p.birthAt}">born ${esc(p.birthPlace)}</button>` : `born ${esc(p.birthPlace)} <span class="meta">(not located)</span>`}</li>`;
+    if (p.deathPlace) html += `<li><span class="dot" style="background:${lineColour(p.line)}"></span>${p.deathAt >= 0 ? `<button type="button" data-place="${p.deathAt}">died ${esc(p.deathPlace)}</button>` : `died ${esc(p.deathPlace)} <span class="meta">(not located)</span>`}</li>`;
+    html += '</ul>';
+    if (p.wikitree) html += `<p class="note"><a href="https://www.wikitree.com/wiki/${esc(p.wikitree)}" target="_blank" rel="noopener">WikiTree ${esc(p.wikitree)}</a></p>`;
+    if (data.treeUrl) html += `<p class="note"><a href="${esc(data.treeUrl)}#n=${p.n}" target="_blank" rel="noopener">Open in the family tree &rarr;</a></p>`;
+    panel.innerHTML = html; panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false');
+    panel.querySelector('.close').onclick = hidePanel;
+    panel.querySelectorAll('[data-place]').forEach(b => b.onclick = () => { const i = +b.dataset.place; flyTo(places[i].lon, places[i].lat, 120); showPlace(i); });
+    root.selectAll('path.arc').attr('stroke-opacity', d => d.p.id === id ? 1 : 0.15).attr('stroke-width', d => (d.p.id === id ? 2.2 : 1.2) / k);
+    root.selectAll('circle.pin').classed('hit', d => d.i === p.birthAt || d.i === p.deathAt);
+    const at = p.birthAt >= 0 ? places[p.birthAt] : p.deathAt >= 0 ? places[p.deathAt] : null;
+    if (at) flyTo(at.lon, at.lat, 60);
+  };
+
+  // search over people and places
+  const q = document.getElementById('q'), results = document.getElementById('results');
+  let hits = [], active = -1;
+  const showResults = () => {
+    results.innerHTML = hits.map((h, i) => `<li role="option" class="${i === active ? 'active' : ''}" data-i="${i}">${esc(h.label)}<span class="n">${esc(h.sub)}</span></li>`).join('');
+    results.classList.toggle('show', hits.length > 0);
+    results.querySelectorAll('li').forEach(li => li.onclick = () => { hits[+li.dataset.i].go(); hits = []; showResults(); });
+  };
+  q.addEventListener('input', () => {
+    const s = norm(q.value.trim()); hits = [];
+    if (s.length >= 2) {
+      places.forEach((pl, i) => { if (norm(pl.label + ' ' + pl.names.join(' ')).includes(s)) hits.push({ label: pl.label, sub: `${pl.births.length + pl.deaths.length} people`, go: () => { flyTo(pl.lon, pl.lat, 120); showPlace(i); } }); });
+      persons.forEach(p => { if (norm(p.name).includes(s)) hits.push({ label: p.name, sub: [years(p), p.rel].filter(Boolean).join(' · '), go: () => showPerson(p.id) }); });
+      hits = hits.slice(0, 10);
+    }
+    active = hits.length ? 0 : -1; showResults();
+  });
+  q.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { active = Math.min(hits.length - 1, active + 1); showResults(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { active = Math.max(0, active - 1); showResults(); e.preventDefault(); }
+    else if (e.key === 'Enter' && active >= 0) { hits[active].go(); hits = []; showResults(); q.blur(); }
+    else if (e.key === 'Escape') { hits = []; showResults(); q.blur(); }
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.search')) { hits = []; showResults(); } });
+  document.addEventListener('keydown', e => {
+    if (e.target === q) return;
+    if (e.key === '/') { e.preventDefault(); q.focus(); } else if (e.key === 'Escape') hidePanel();
+    else if (e.key === '0') fitPlaces(() => true, true);
+  });
+  // A resize re-fits the projection, so keep the same place under the centre
+  // of the screen at the same pixels-per-degree rather than the same transform.
+  window.addEventListener('resize', () => {
+    const t = d3.zoomTransform(svg.node());
+    const old = cur;
+    const centre = projection.invert([(old.W / 2 - t.x) / t.k, ((old.H + 60) / 2 - t.y) / t.k]);
+    const oldScale = projection.scale();
+    setup(); render();
+    if (!centre || !isFinite(centre[0])) return;
+    const k2 = t.k * oldScale / projection.scale();
+    const [x, y] = projection(centre);
+    svg.call(zoom.transform, d3.zoomIdentity.translate(cur.W / 2 - k2 * x, (cur.H + 60) / 2 - k2 * y).scale(k2));
+  });
+
+  render();
+  // #sa, #eu, #uk pick an opening view; the default frames every located place
+  const view = location.hash.replace('#', '');
+  if (view === 'sa') fitPlaces(pl => pl.lat < -20 && pl.lon > 10 && pl.lon < 35, false);
+  else if (view === 'eu') fitPlaces(pl => pl.lat > 35 && pl.lon > -12 && pl.lon < 25, false);
+  else if (view === 'uk') fitPlaces(pl => pl.lat > 49 && pl.lat < 60 && pl.lon > -8 && pl.lon < 2, false);
+  else fitPlaces(() => true, false);
+})();
+</script>

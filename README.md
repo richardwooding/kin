@@ -54,10 +54,11 @@ kin graph build -seed examples/seed.json -out data/graph.json
 kin graph report -graph data/graph.json -from seed:me
 kin viz -graph data/graph.json -seed seed:me -site examples/site.json -records examples/records.json -out dist/index.html
 kin tree -graph data/graph.json -root seed:me -site examples/site.json -records examples/records.json -out dist/tree.html
+kin map -graph data/graph.json -root seed:me -site examples/site.json -offline -places examples/places.json -out dist/map.html
 kin report -graph data/graph.json -root seed:me -records examples/records.json -out dist/report.html
 ```
 
-Open `dist/index.html` and `dist/tree.html` in a browser. Then replace the seed with your own family
+Open `dist/index.html`, `dist/tree.html` and `dist/map.html` in a browser. Then replace the seed with your own family
 and start pulling records:
 
 ```sh
@@ -87,6 +88,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin graph report -graph data/graph.json -from seed:me` | — | Counts: network size, documented ancestors by generation, earliest dated ancestor |
 | `kin viz -graph data/graph.json -seed seed:me [-site site.json] [-notices …] [-records …] [-probable id] [-tree-url URL]` | — | Writes the ancestry page |
 | `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL]` | — | Writes the pan-and-zoom family tree page |
+| `kin map -graph data/graph.json -root seed:me [-reader id] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL]` | Nominatim (OpenStreetMap) for coordinates | Writes a pan-and-zoom map of the ancestors' birth and death places |
 | `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …]` | — | Writes a printable A4 ancestry report |
 
 Every subcommand prints its flags with `-h`.
@@ -173,6 +175,34 @@ often live at two different addresses, the links are given as absolute URLs:
 `kin tree -dashboard-url URL` puts a dashboard link in the tree's panel.
 Relative paths do not survive publishing to separate addresses.
 
+## Map
+
+`kin map` puts every ancestor's birthplace and place of death on a world map
+drawn from an embedded Natural Earth outline, so the page loads nothing from a
+tile server and can be published anywhere. Pins are sized by the number of
+people at a place and coloured by grandparent line; hollow pins mark a place
+that resolved only to a region or country; thin arcs join each person's
+birthplace to their place of death. Click a pin for the people, a person for
+their journey, and use the toolbar to fit all places, southern Africa or Europe.
+
+Coordinates come from OpenStreetMap's Nominatim geocoder, one query per distinct
+place string at its permitted rate of one a second, and are cached in the file
+named by `-cache`, so a second run is instant and `-offline` never calls out.
+Historic spellings are normalised before lookup (de Caep de Goede Hoop,
+Drakenstein, 't Land van Waveren, Cabo de Goede Hoop, Heiliges Römisches Reich,
+Spaanse Nederlanden, Courtrai), the whole name is tried first and then the name
+without its historic polity, the first part with the country, and coarser
+suffixes, and only settlements, administrative areas and waters are accepted,
+never a school, shop or monument that happens to carry the name. The cache
+records which version of these rules produced each answer, so a new release
+re-asks only what its rules would answer differently. Names the geocoder cannot
+place are listed in the header; give them coordinates in a `-places` JSON file
+(`{"place string": {"lat": .., "lon": .., "label": ..}}`), as
+`examples/places.json` does for the example family.
+
+`kin viz -map-url URL` and `kin map -dashboard-url URL -tree-url URL` link the
+pages together, as for the tree.
+
 ## Printable reports
 
 ```sh
@@ -212,6 +242,9 @@ couple on it, the records consulted, where to order copies, and your notes.
   central, `GEN` genealogical. Sources `MHG` (Transvaal and Free State estates) and
   `MOOC` (Cape estates) hold death notices that name parents and children.
 - **Wikidata**: queries carry a descriptive user agent as its policy requires.
+- **OpenStreetMap Nominatim**: `kin map` sends one request per place at one per
+  second with the kin user agent, as the usage policy asks, and caches every
+  answer. Do not run it in a loop against the same places; the cache is the point.
 - **UK National Archives**: `kin war` uses the public Discovery catalogue API, one
   query per surname, with a pause between calls. It finds catalogue entries only;
   the record images (medal cards, attestations) are paid downloads at Kew or via

@@ -1,0 +1,9 @@
+{
+  "Cape Town, Western Cape, South Africa": {"lat": -33.9249, "lon": 18.4241, "label": "Cape Town, Western Cape, South Africa"},
+  "Port Elizabeth, Eastern Cape, South Africa": {"lat": -33.9608, "lon": 25.6022, "label": "Gqeberha (Port Elizabeth), Eastern Cape, South Africa"},
+  "Durban, KwaZulu-Natal, South Africa": {"lat": -29.8587, "lon": 31.0218, "label": "Durban, KwaZulu-Natal, South Africa"},
+  "Portsmouth, Hampshire, England": {"lat": 50.8198, "lon": -1.0880, "label": "Portsmouth, Hampshire, England"},
+  "Graaff-Reinet, Eastern Cape, South Africa": {"lat": -32.2522, "lon": 24.5308, "label": "Graaff-Reinet, Eastern Cape, South Africa"},
+  "Cardiff, Wales": {"lat": 51.4816, "lon": -3.1791, "label": "Cardiff, Wales"},
+  "Pietermaritzburg, KwaZulu-Natal, South Africa": {"lat": -29.6006, "lon": 30.3794, "label": "Pietermaritzburg, KwaZulu-Natal, South Africa"}
+}

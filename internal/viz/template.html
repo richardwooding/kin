@@ -111,7 +111,7 @@
     <div class="eyebrow" id="eyebrow">Family history · public records</div>
     <h1 id="title">Kin</h1>
     <p class="lede" id="lede"></p>
-    <p class="links" id="links" hidden><a id="tree-link" target="_blank" rel="noopener">Open the family tree &rarr;</a></p>
+    <p class="links" id="links" hidden><a id="tree-link" target="_blank" rel="noopener" hidden>Open the family tree &rarr;</a> <a id="map-link" target="_blank" rel="noopener" hidden>Open the map &rarr;</a></p>
   </header>
 
   <section class="tiles" id="tiles"></section>
@@ -249,7 +249,8 @@
   document.getElementById('order-anchor').insertAdjacentHTML('beforebegin',
     (site.orderingRows || []).map(r => `<tr><td>${esc(r.prefix)}</td><td>${esc(r.holding)}</td><td>${esc(r.how)}</td></tr>`).join(''));
 
-  if (data.treeUrl) { document.getElementById('links').hidden = false; document.getElementById('tree-link').href = data.treeUrl; }
+  if (data.treeUrl) { document.getElementById('links').hidden = false; const a = document.getElementById('tree-link'); a.hidden = false; a.href = data.treeUrl; }
+  if (data.mapUrl) { document.getElementById('links').hidden = false; const a = document.getElementById('map-link'); a.hidden = false; a.href = data.mapUrl; }
 
   // lede + tiles
   document.getElementById('lede').innerHTML =

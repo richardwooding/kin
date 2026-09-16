@@ -29,6 +29,8 @@ jobs:
           go run ./cmd/kin viz -graph /tmp/kin/graph.json -seed seed:me -site examples/site.json -records examples/records.json -notices "" -out /tmp/kin/index.html
           go run ./cmd/kin report -graph /tmp/kin/graph.json -root seed:me -records examples/records.json -out /tmp/kin/report.html
           go run ./cmd/kin tree -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -records examples/records.json -out /tmp/kin/tree.html
+          go run ./cmd/kin map -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -offline -cache "" -places examples/places.json -out /tmp/kin/map.html
+          grep -q '"label":"Portsmouth' /tmp/kin/map.html
           grep -q 'Smith Kin' /tmp/kin/index.html
           grep -q 'Smith Kin' /tmp/kin/tree.html && grep -q '"id":"seed:mm"' /tmp/kin/tree.html
       - name: goreleaser config check

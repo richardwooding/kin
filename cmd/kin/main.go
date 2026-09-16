@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/richardwooding/kin/internal/eggsa"
+	"github.com/richardwooding/kin/internal/geomap"
 	"github.com/richardwooding/kin/internal/graph"
 	"github.com/richardwooding/kin/internal/httpx"
 	"github.com/richardwooding/kin/internal/model"
@@ -64,6 +65,7 @@ func usage() {
   graph kin          -graph data/graph.json -from seed:me -to wt:Smith-1
   graph report       -graph data/graph.json -from seed:me
   viz                -graph data/graph.json -seed seed:me [-site site.json] [-notices data/papers.json] [-records records.json] [-probable wt:X] [-tree-url URL] -out dist/index.html
+  map                -graph data/graph.json -root seed:me [-reader seed:me] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL] -out dist/map.html   (birth and death places on a pan-and-zoom map)
   tree               -graph data/graph.json -root seed:me [-reader seed:me] [-gen 20] [-site site.json] [-records records.json] [-probable wt:X] [-dashboard-url URL] -out dist/tree.html   (pan-and-zoom pedigree)
   naairs             -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932] [-out data/naairs_smith.json]   (National Archives of South Africa index)
   naairs sweep       -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume] -out data/naairs_sweep.json   (score index hits for every ancestor)
@@ -102,6 +104,8 @@ func main() {
 		cmdTree(os.Args[2:])
 	case "war":
 		cmdWar(ctx, os.Args[2:])
+	case "map":
+		cmdMap(ctx, os.Args[2:])
 	case "report":
 		cmdReport(os.Args[2:])
 	case "naairs":
@@ -693,6 +697,7 @@ func cmdViz(args []string) {
 	out := fs.String("out", "dist/index.html", "output html")
 	site := fs.String("site", "", "site json: title, eyebrow, flags, extra ordering rows (optional)")
 	treeURL := fs.String("tree-url", "", "absolute URL of the published family tree page, linked from the header (optional)")
+	mapURL := fs.String("map-url", "", "absolute URL of the published map page, linked from the header (optional)")
 	notices := fs.String("notices", "data/papers.json", "newspaper notices json from `kin eggsa papers` (optional)")
 	records := fs.String("records", "records.json", "hand-collected record citations json (optional)")
 	var probable multi
@@ -704,7 +709,7 @@ func cmdViz(args []string) {
 	st, err := viz.LoadSite(*site)
 	die(err)
 	die(os.MkdirAll(filepath.Dir(*out), 0o755))
-	die(viz.Render(g, viz.Options{Seed: *seed, NoticesPath: *notices, RecordsPath: *records, ProbableIDs: probable, Site: st, TreeURL: *treeURL}, *out))
+	die(viz.Render(g, viz.Options{Seed: *seed, NoticesPath: *notices, RecordsPath: *records, ProbableIDs: probable, Site: st, TreeURL: *treeURL, MapURL: *mapURL}, *out))
 	logf("viz: wrote %s", *out)
 }
 
@@ -910,4 +915,34 @@ func cmdWar(ctx context.Context, args []string) {
 	die(os.MkdirAll(filepath.Dir(*out), 0o755))
 	die(os.WriteFile(*out, b, 0o644))
 	logf("war: wrote %s", *out)
+}
+
+// ---------------------------------------------------------------- map
+
+func cmdMap(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("map", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are mapped (required)")
+	reader := fs.String("reader", "", "person the relationship labels are relative to (default: -root)")
+	gen := fs.Int("gen", 20, "generations above root")
+	site := fs.String("site", "", "site json: title and eyebrow are used (optional)")
+	cache := fs.String("cache", "data/cache/geo.json", "geocoding cache json, read and written")
+	placesPath := fs.String("places", "", "manual coordinates json: {\"place string\": {\"lat\":..,\"lon\":..,\"label\":..}} (optional)")
+	offline := fs.Bool("offline", false, "use the cache and overrides only; never call the geocoder")
+	dash := fs.String("dashboard-url", "", "absolute URL of the published dashboard (optional)")
+	treeURL := fs.String("tree-url", "", "absolute URL of the published family tree (optional)")
+	out := fs.String("out", "dist/map.html", "output html")
+	fs.Parse(args)
+	need("root", *root)
+	g, err := model.Load(*gp)
+	die(err)
+	st, err := viz.LoadSite(*site)
+	die(err)
+	die(os.MkdirAll(filepath.Dir(*out), 0o755))
+	if *cache != "" {
+		die(os.MkdirAll(filepath.Dir(*cache), 0o755))
+	}
+	die(geomap.Render(ctx, g, geomap.Options{Root: *root, Reader: *reader, MaxGen: *gen, CachePath: *cache, PlacesPath: *placesPath, Offline: *offline,
+		DashboardURL: *dash, TreeURL: *treeURL, Site: st, Log: logf}, *out))
+	logf("map: wrote %s", *out)
 }
