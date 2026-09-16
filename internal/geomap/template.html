@@ -6,7 +6,7 @@
     --page: #f3f4f6;  --surface: #fcfcfb;  --ink: #0b0b0b;  --ink-2: #52514e;
     --muted: #898781; --grid: #e1e0d9;     --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
     --s1: #2a78d6; --s3: #1baf7a; --warn: #8a6508; --s4: #8b3fbf;
-    --sea: #e7ebef; --land: #f7f6f2; --border: #cfcdc4;
+    --sea: #d9e4ec; --land: #f3ecdc; --coast: #b9b09a; --border: #c4bba6;
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
@@ -16,7 +16,7 @@
       --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
       --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
       --s1: #3987e5; --s3: #199e70; --warn: #d9a441; --s4: #a86ad6;
-      --sea: #101214; --land: #1d1e1c; --border: #33342f;
+      --sea: #0e1418; --land: #2d2f2b; --coast: #5a5d55; --border: #4a4c46;
     }
   }
   :root[data-theme="dark"] {
@@ -24,7 +24,7 @@
     --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
     --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
     --s1: #3987e5; --s3: #199e70; --warn: #d9a441; --s4: #a86ad6;
-    --sea: #101214; --land: #1d1e1c; --border: #33342f;
+    --sea: #0e1418; --land: #2d2f2b; --coast: #5a5d55; --border: #4a4c46;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; overflow: hidden; }
@@ -66,7 +66,7 @@
   .panel .note { font-size: 12.5px; color: var(--ink-2); }
   .foot { position: fixed; left: 12px; bottom: 12px; margin: 0; font-size: 12px; color: var(--muted); max-width: 70ch; z-index: 2; }
   .tip { position: fixed; pointer-events: none; padding: 6px 9px; font-size: 12.5px; z-index: 4; display: none; max-width: 300px; }
-  path.land { fill: var(--land); stroke: none; }
+  path.land { fill: var(--land); stroke: var(--coast); stroke-linejoin: round; }
   path.border { fill: none; stroke: var(--border); }
   path.arc { fill: none; stroke-opacity: 0.45; }
   circle.pin { stroke: var(--surface); fill-opacity: 0.85; cursor: pointer; }
@@ -198,6 +198,7 @@
     restyle();
   };
   const restyle = () => {
+    root.select('g.land').selectAll('path.land').attr('stroke-width', 0.6 / k);
     root.select('g.land').selectAll('path.border').attr('stroke-width', 0.7 / k);
     root.select('g.arcs').selectAll('path.arc').attr('stroke-width', 1.2 / k);
     root.select('g.pins').selectAll('circle.pin').attr('r', d => radius(d) / k).attr('stroke-width', 1.2 / k);
