@@ -22,6 +22,7 @@ import (
 	"github.com/richardwooding/kin/internal/report"
 	"github.com/richardwooding/kin/internal/tree"
 	"github.com/richardwooding/kin/internal/viz"
+	"github.com/richardwooding/kin/internal/war"
 	"github.com/richardwooding/kin/internal/wikidata"
 	"github.com/richardwooding/kin/internal/wikitree"
 )
@@ -66,6 +67,7 @@ func usage() {
   tree               -graph data/graph.json -root seed:me [-reader seed:me] [-gen 20] [-site site.json] [-records records.json] [-probable wt:X] [-dashboard-url URL] -out dist/tree.html   (pan-and-zoom pedigree)
   naairs             -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932] [-out data/naairs_smith.json]   (National Archives of South Africa index)
   naairs sweep       -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume] -out data/naairs_sweep.json   (score index hits for every ancestor)
+  war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
   version            print the version, commit and build date
 `)
@@ -98,6 +100,8 @@ func main() {
 		cmdViz(os.Args[2:])
 	case "tree":
 		cmdTree(os.Args[2:])
+	case "war":
+		cmdWar(ctx, os.Args[2:])
 	case "report":
 		cmdReport(os.Args[2:])
 	case "naairs":
@@ -873,4 +877,37 @@ func cmdNaairsSweep(ctx context.Context, args []string) {
 		}
 	})
 	logf("naairs sweep: wrote %s", *out)
+}
+
+// ---------------------------------------------------------------- war
+
+func cmdWar(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("war", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	from := fs.String("from", "", "person whose ancestors and their sons are checked (required)")
+	minB := fs.Int("min-birth", 1855, "earliest birth year")
+	maxB := fs.Int("max-birth", 1927, "latest birth year")
+	boer := fs.Bool("boer", true, "also query the South African archives index for the war years 1899-1903")
+	delay := fs.Duration("delay", 800*time.Millisecond, "pause between remote calls")
+	out := fs.String("out", "data/war.json", "results json")
+	fs.Parse(args)
+	need("from", *from)
+	g, err := model.Load(*gp)
+	die(err)
+	men := war.Men(g, *from, *minB, *maxB)
+	logf("war: %d men of military age", len(men))
+	results := war.Run(ctx, g, men, war.Options{Delay: *delay, Boer: *boer, Log: logf})
+	for _, r := range results {
+		fmt.Printf("\n%s (%s-%s) %s: %s\n", r.Name, r.Birth, r.Death, r.Role, strings.Join(r.Wars, "; "))
+		for i, h := range r.Hits {
+			if i >= 5 {
+				break
+			}
+			fmt.Printf("  %d  %-6s %-22s %s [%s]  %s\n", h.Score, h.Source, h.Reference, trunc(h.Description, 110), h.Dates, strings.Join(h.Why, ", "))
+		}
+	}
+	b, _ := json.MarshalIndent(results, "", "  ")
+	die(os.MkdirAll(filepath.Dir(*out), 0o755))
+	die(os.WriteFile(*out, b, 0o644))
+	logf("war: wrote %s", *out)
 }

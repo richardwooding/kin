@@ -80,6 +80,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin eggsa papers -surname Smith` | eGGSA newspaper extracts | Newspaper notices mentioning the surname; pages are cached under `data/cache/papers` |
 | `kin naairs -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932]` | National Archives of South Africa index | Estate, court and government file references |
 | `kin naairs sweep -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume]` | National Archives of South Africa index | Queries the index once per ancestor (and under married names), scores every hit against names, dates and spouses, and saves the candidates |
+| `kin war -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer]` | UK National Archives Discovery catalogue; NAAIRS | Lists the men of military age among the ancestors and their sons and checks them against the name-indexed imperial military series (Boer War attestations and rolls, First World War medal cards and officers' files, navy and air force registers) and, for the Boer side, the South African archives for 1899 to 1903 |
 | `kin wikidata surname -name Smith`, `kin wikidata place -name Stellenbosch -country Q258` | Wikidata SPARQL and search | People with a family name or born in a place (optional; not needed for the pipeline) |
 | `kin graph build -seed seed.json -in a.json,b.json` | — | Merges graphs, deduplicating people that carry the same WikiTree or Wikidata id and recording the merge aliases |
 | `kin graph kin -graph data/graph.json -from seed:me -to wt:Smith-1` | — | Labels the relationship and lists the common ancestors |
@@ -211,6 +212,11 @@ couple on it, the records consulted, where to order copies, and your notes.
   central, `GEN` genealogical. Sources `MHG` (Transvaal and Free State estates) and
   `MOOC` (Cape estates) hold death notices that name parents and children.
 - **Wikidata**: queries carry a descriptive user agent as its policy requires.
+- **UK National Archives**: `kin war` uses the public Discovery catalogue API, one
+  query per surname, with a pause between calls. It finds catalogue entries only;
+  the record images (medal cards, attestations) are paid downloads at Kew or via
+  the commercial partners. South African units' own records are not at Kew but at
+  the SANDF Documentation Centre in Pretoria, which answers written requests.
 - **FamilySearch** is not queried; its index entries and register images are read
   by hand and recorded in the records file with their ark and image references.
 
