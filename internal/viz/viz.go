@@ -26,6 +26,14 @@ type Site struct {
 	FlagsNote    string        `json:"flagsNote,omitempty"`    // sentence explaining the flags
 	Flags        []Flag        `json:"flags,omitempty"`        // pills shown in the regional-records table
 	OrderingRows []OrderingRow `json:"orderingRows,omitempty"` // rows added to "Where to order copies"
+	Links        []Link        `json:"links,omitempty"`        // extra links in the header row, e.g. the printable reports
+}
+
+// Link is one extra header link; Href is used as written, so a relative path
+// suits pages published together.
+type Link struct {
+	Label string `json:"label"`
+	Href  string `json:"href"`
 }
 
 // Flag marks people in the regional-records table: everyone descended from
@@ -76,6 +84,11 @@ func LoadSite(path string) (Site, error) {
 			if _, err := regexp.Compile("(?i)" + f.NamePattern); err != nil {
 				return s, fmt.Errorf("%s: flag %q: %w", path, f.Label, err)
 			}
+		}
+	}
+	for _, l := range s.Links {
+		if l.Label == "" || l.Href == "" {
+			return s, fmt.Errorf("%s: link %q: label and href are required", path, l.Label)
 		}
 	}
 	return s, nil

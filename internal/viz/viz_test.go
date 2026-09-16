@@ -31,3 +31,19 @@ func TestLoadSiteOverridesOnlyGivenKeys(t *testing.T) {
 		t.Error("invalid pattern should fail")
 	}
 }
+
+func TestLoadSiteLinks(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "site.json")
+	os.WriteFile(p, []byte(`{"links":[{"label":"A","href":"a.html"},{"label":"B","href":"b.html"}]}`), 0o644)
+	s, err := LoadSite(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Links) != 2 || s.Links[1].Href != "b.html" {
+		t.Errorf("got %+v", s.Links)
+	}
+	os.WriteFile(p, []byte(`{"links":[{"label":"no href"}]}`), 0o644)
+	if _, err := LoadSite(p); err == nil {
+		t.Error("link without href should fail")
+	}
+}

@@ -64,6 +64,7 @@ func usage() {
   graph build        -seed seed.json -in data/a.json,data/b.json -out data/graph.json
   graph kin          -graph data/graph.json -from seed:me -to wt:Smith-1
   graph report       -graph data/graph.json -from seed:me
+  graph redact       -graph data/graph.json -out data/graph.public.json   (strip dates, places, notes and URLs from living people before publishing)
   viz                -graph data/graph.json -seed seed:me [-site site.json] [-notices data/papers.json] [-records records.json] [-probable wt:X] [-tree-url URL] -out dist/index.html
   map                -graph data/graph.json -root seed:me [-reader seed:me] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL] -out dist/map.html   (birth and death places on a pan-and-zoom map)
   tree               -graph data/graph.json -root seed:me [-reader seed:me] [-gen 20] [-site site.json] [-records records.json] [-probable wt:X] [-dashboard-url URL] -out dist/tree.html   (pan-and-zoom pedigree)
@@ -531,6 +532,16 @@ func cmdGraph(ctx context.Context, args []string) {
 		merged := crossLink(g)
 		logf("graph: %d persons after merging %d cross-source duplicates", len(g.Persons), merged)
 		die(g.Save(*out))
+	case "redact":
+		fs := flag.NewFlagSet("graph redact", flag.ExitOnError)
+		gp := fs.String("graph", "data/graph.json", "graph json")
+		out := fs.String("out", "data/graph.public.json", "redacted graph json")
+		fs.Parse(args[1:])
+		g, err := model.Load(*gp)
+		die(err)
+		r, n := g.Redacted()
+		logf("graph: redacted %d living of %d persons", n, len(r.Persons))
+		die(r.Save(*out))
 	case "kin":
 		fs := flag.NewFlagSet("graph kin", flag.ExitOnError)
 		gp := fs.String("graph", "data/graph.json", "graph json")

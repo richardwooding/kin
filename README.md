@@ -86,6 +86,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin graph build -seed seed.json -in a.json,b.json` | — | Merges graphs, deduplicating people that carry the same WikiTree or Wikidata id and recording the merge aliases |
 | `kin graph kin -graph data/graph.json -from seed:me -to wt:Smith-1` | — | Labels the relationship and lists the common ancestors |
 | `kin graph report -graph data/graph.json -from seed:me` | — | Counts: network size, documented ancestors by generation, earliest dated ancestor |
+| `kin graph redact -graph data/graph.json -out data/graph.public.json` | — | Copy of the graph in which every living person keeps only names, gender, parent and spouse links, source tags and WikiTree/Wikidata ids; dates, places, occupations, notes and URLs are removed |
 | `kin viz -graph data/graph.json -seed seed:me [-site site.json] [-notices …] [-records …] [-probable id] [-tree-url URL]` | — | Writes the ancestry page |
 | `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL]` | — | Writes the pan-and-zoom family tree page |
 | `kin map -graph data/graph.json -root seed:me [-reader id] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL]` | Nominatim (OpenStreetMap) for coordinates | Writes a pan-and-zoom map of the ancestors' birth and death places |
@@ -111,11 +112,14 @@ Ids are namespaced by source:
 | `wd:Q42` | Wikidata item |
 | `eggsa:<hash>` | eGGSA gravestone entry |
 
-Living people are shown exactly as the seed and the sources record them; the
-`"living": true` flag is carried through the graph for your own filtering but
-hides nothing. WikiTree's own privacy settings already hide most living
-profiles, so keep living people out of the seed if you intend to publish the
-pages.
+The renderers show living people exactly as the seed and the sources record
+them; the `"living": true` flag is carried through the graph but hides nothing
+on its own. To publish, run `kin graph redact` first and point `viz`, `tree`,
+`map` and `report` at the file it writes: every living person then keeps only
+`id`, `name`, `given`, `surname`, `gender`, `father`, `mother`, `spouses`,
+`sources`, `wikitree`, `wikidata` and `living`, so they appear by name in the
+tree and tables with no dates, places, notes or links. WikiTree's own privacy
+settings already hide most living profiles.
 
 ### Records
 
@@ -137,14 +141,18 @@ to the tool. All keys are optional:
     { "label": "Portsmouth line", "descendantsOf": "seed:ff", "style": "ok" },
     { "label": "name echo", "namePattern": "\\b(william|peter)\\b" }
   ],
-  "orderingRows": [ { "prefix": "…", "holding": "…", "how": "…" } ]
+  "orderingRows": [ { "prefix": "…", "holding": "…", "how": "…" } ],
+  "links": [ { "label": "Mary Jones and her ancestors", "href": "jones-line.html" } ]
 }
 ```
 
 `flags` add a column to the regional-records table: a flag applies to everyone
 descended from `descendantsOf`, or to everyone whose given name matches
 `namePattern` (case-insensitive). `orderingRows` are added to the "Where to order
-copies" table.
+copies" table. `links` are shown in the dashboard header beside the tree and map
+links; use them to point at the printable reports. An `href` is used as written,
+so a relative path suits a site where every page is published together, unlike
+`-tree-url`, which is meant to be absolute.
 
 ### Probable links
 
@@ -213,7 +221,8 @@ chromium --headless=new --disable-gpu --no-pdf-header-footer \
 ```
 
 The report lists the direct line with Ahnentafel numbers, the children of every
-couple on it, the records consulted, where to order copies, and your notes.
+couple on it, the records consulted, where to order copies, and your notes. To
+link the reports from the dashboard, list them under `links` in the site file.
 
 ## Sources: terms and manners
 

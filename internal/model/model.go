@@ -12,6 +12,7 @@ import (
 // Person is one node in the kinship graph. IDs are namespaced by source:
 // seed: (hand-entered), fs: (hand-entered from FamilySearch), wd:Q… (Wikidata),
 // wt:<WikiTree-Id> (WikiTree), eggsa:<hash> (eGGSA gravestones).
+// A new field must be added to Merge and classified in Redact.
 type Person struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
@@ -96,6 +97,53 @@ func (p *Person) Merge(o *Person) {
 	p.Spouses = Uniq(append(p.Spouses, o.Spouses...))
 	p.Sources = Uniq(append(p.Sources, o.Sources...))
 	p.Living = p.Living || o.Living
+}
+
+// Redact returns a copy of p that keeps only identity and family structure:
+// names, gender, parent and spouse links, source tags, WikiTree and Wikidata
+// ids and the living flag. Dates, places, occupations, notes and URLs are
+// dropped. Built as an allow-list so that a field added later is dropped
+// until it is classified here.
+func (p *Person) Redact() *Person {
+	return &Person{
+		ID:       p.ID,
+		Name:     p.Name,
+		Given:    p.Given,
+		Surname:  p.Surname,
+		Gender:   p.Gender,
+		Wikidata: p.Wikidata,
+		WikiTree: p.WikiTree,
+		Father:   p.Father,
+		Mother:   p.Mother,
+		Spouses:  append([]string(nil), p.Spouses...),
+		Sources:  append([]string(nil), p.Sources...),
+		Living:   p.Living,
+	}
+}
+
+// Redacted returns a copy of g in which every living person is reduced to
+// Redact, and the number of persons so reduced. Other persons and the
+// aliases are copied unchanged; g is not modified.
+func (g *Graph) Redacted() (*Graph, int) {
+	out := NewGraph()
+	n := 0
+	for id, p := range g.Persons {
+		if p.Living {
+			out.Persons[id] = p.Redact()
+			n++
+			continue
+		}
+		c := *p
+		c.Occupations = append([]string(nil), p.Occupations...)
+		c.Citizenship = append([]string(nil), p.Citizenship...)
+		c.Spouses = append([]string(nil), p.Spouses...)
+		c.Sources = append([]string(nil), p.Sources...)
+		out.Persons[id] = &c
+	}
+	for k, v := range g.Aliases {
+		out.Aliases[k] = v
+	}
+	return out, n
 }
 
 // fillRef fills a parent reference, letting a resolved id replace an
