@@ -18,6 +18,8 @@ func testGraph() *model.Graph {
 	g.Add(&model.Person{ID: "wt:x", Name: "Henry Charles Clegg", Given: "Henry Charles", Surname: "Clegg", Birth: "1874", BirthPlace: "Bermondsey, Surrey, England", Father: "wt:y", Mother: "wt:z"})
 	g.Add(&model.Person{ID: "wt:y", Name: "William Clegg", Given: "William", Surname: "Clegg"})
 	g.Add(&model.Person{ID: "wt:z", Name: "Ann Clegg", Given: "Ann", Surname: "Clegg", Father: "wt:n", Mother: "wt:t"})
+	g.Add(&model.Person{ID: "fs:sarah", Name: "Sarah Thomas", Given: "Sarah", Surname: "Thomas"})
+	g.Persons["fs:f"].Mother = "fs:sarah"
 	g.Add(&model.Person{ID: "wt:n", Name: "James Nuns", Given: "James", Surname: "Nuns", Birth: "1829", BirthPlace: "London, England", Death: "1898", DeathPlace: "Mossel Bay, Cape Colony, South Africa"})
 	g.Add(&model.Person{ID: "wt:t", Name: "Anna Marais", Given: "Anna", Surname: "Marais", Birth: "1830", Death: "1900", DeathPlace: "Johannesburg, Transvaal, South Africa"})
 	return g
@@ -44,7 +46,7 @@ func group(e *Entry, service string) *Group {
 func TestBuildFrontier(t *testing.T) {
 	entries := Build(testGraph(), Options{Root: "seed:me", ProbableIDs: []string{"wt:x"}})
 	f := find(entries, "fs:f")
-	if f == nil || strings.Join(f.Why, ";") != "no father;no mother" || f.Gen != 1 {
+	if f == nil || strings.Join(f.Why, ";") != "no father" || f.Gen != 1 {
 		t.Fatalf("fs:f entry wrong: %+v", f)
 	}
 	m := find(entries, "fs:m")
@@ -135,6 +137,16 @@ func TestBothCountries(t *testing.T) {
 	}
 	if sa := group(m, "South Africa"); sa == nil || !strings.Contains(sa.Leads[0].Hint, "-db TAB") {
 		t.Errorf("Transvaal depot expected: %+v", sa)
+	}
+}
+
+func TestPlacesFallBackToChildren(t *testing.T) {
+	e := find(Build(testGraph(), Options{Root: "seed:me"}), "fs:sarah")
+	if e == nil || group(e, "Cornwall OPC") == nil || group(e, "England and Wales") == nil {
+		t.Fatalf("a mother with no places should take her Cornish child's region: %+v", e)
+	}
+	if fs := group(e, "FamilySearch"); strings.Contains(fs.Leads[0].URL, "q.anyPlace") {
+		t.Error("inferred places must not be put into the search itself")
 	}
 }
 

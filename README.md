@@ -233,7 +233,9 @@ kin leads -graph data/graph.json -root seed:me -probable wt:Smith-1 -out dist/le
 
 `kin leads` walks the ancestry of `-root`, picks out the research frontier, every
 ancestor missing a father or mother plus every `-probable` id, and composes search
-links for each from their names, dates and places. It prints them as text and, with
+links for each from their names, dates and places (a person with no place of their
+own takes the region of their spouses and children, so a parent known only from a
+baptism still gets that parish's country). It prints them as text and, with
 `-out`, writes a private page of clickable links. `-id` composes leads for one person
 instead. Nothing is fetched: the links open searches on FamilySearch (by name and
 date, plus the 1881 census of England and Wales or the Cape probate records where

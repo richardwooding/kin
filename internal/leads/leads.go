@@ -92,10 +92,18 @@ func Build(g *model.Graph, opts Options) []Entry {
 			}
 		}
 	}
+	kids := map[string][]*model.Person{}
+	for _, p := range g.Persons {
+		for _, par := range []string{p.Father, p.Mother} {
+			if par != "" {
+				kids[g.Resolve(par)] = append(kids[g.Resolve(par)], p)
+			}
+		}
+	}
 	out := make([]Entry, 0, len(why))
 	for id, reasons := range why {
 		p := g.Persons[id]
-		out = append(out, Entry{Person: p, Gen: gen[id], Why: model.Uniq(reasons), Groups: groups(p)})
+		out = append(out, Entry{Person: p, Gen: gen[id], Why: model.Uniq(reasons), Groups: groups(p, placesOf(g, p, kids[id]))})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Gen != out[j].Gen {
@@ -115,10 +123,29 @@ const (
 	ireland
 )
 
-// regionsOf reads the birth and death places; a person born in England who
-// died at the Cape belongs to both, and Cornwall implies England.
-func regionsOf(p *model.Person) region {
-	s := strings.ToLower(p.BirthPlace + " | " + p.DeathPlace)
+// placesOf returns the person's own birth and death places or, when both are
+// blank, the places of their spouses and children, so that a parent known
+// only from a child's baptism still gets the leads for that parish's country.
+func placesOf(g *model.Graph, p *model.Person, kids []*model.Person) string {
+	if p.BirthPlace != "" || p.DeathPlace != "" {
+		return p.BirthPlace + " | " + p.DeathPlace
+	}
+	var parts []string
+	for _, sp := range p.Spouses {
+		if q := g.Persons[g.Resolve(sp)]; q != nil {
+			parts = append(parts, q.BirthPlace, q.DeathPlace)
+		}
+	}
+	for _, k := range kids {
+		parts = append(parts, k.BirthPlace, k.DeathPlace)
+	}
+	return strings.Join(parts, " | ")
+}
+
+// regionsOf reads a place text; a person born in England who died at the
+// Cape belongs to both, and Cornwall implies England.
+func regionsOf(places string) region {
+	s := strings.ToLower(places)
 	var r region
 	if strings.Contains(s, "cornwall") {
 		r |= cornwall | england
@@ -136,8 +163,8 @@ func regionsOf(p *model.Person) region {
 }
 
 // depot names the National Archives repository for the places a person lived.
-func depot(p *model.Person) string {
-	s := strings.ToLower(p.BirthPlace + " " + p.DeathPlace)
+func depot(places string) string {
+	s := strings.ToLower(places)
 	switch {
 	case containsAny(s, "transvaal", "johannesburg", "pretoria", "gauteng"):
 		return "TAB"
@@ -167,7 +194,7 @@ func yearOf(s string) int {
 
 func span(a, b int) string { return fmt.Sprintf("%d to %d", a, b) }
 
-func groups(p *model.Person) []Group {
+func groups(p *model.Person, places string) []Group {
 	given := strings.TrimSpace(p.Given)
 	if given == "" {
 		given = strings.TrimSpace(strings.TrimSuffix(p.Name, p.Surname))
@@ -178,7 +205,7 @@ func groups(p *model.Person) []Group {
 	}
 	surname := p.Surname
 	by, dy := yearOf(p.Birth), yearOf(p.Death)
-	r := regionsOf(p)
+	r := regionsOf(places)
 	var out []Group
 
 	if r&cornwall != 0 {
@@ -200,7 +227,7 @@ func groups(p *model.Person) []Group {
 	if r&england != 0 && by > 0 && by <= 1881 && (dy == 0 || dy >= 1881) {
 		fs = append(fs, Lead{Label: "1881 census of England and Wales", URL: familySearch(given, surname, by, "", "2562194")})
 	}
-	if r&southAfrica != 0 && dy > 0 && depot(p) == "KAB" {
+	if r&southAfrica != 0 && dy > 0 && depot(places) == "KAB" {
 		q := url.Values{"q.givenName": {given}, "q.surname": {surname}, "q.deathLikeDate.from": {strconv.Itoa(dy)}, "q.deathLikeDate.to": {strconv.Itoa(dy + 1)}, "f.collectionId": {"2517051"}}
 		fs = append(fs, Lead{Label: "Cape probate records, death " + span(dy, dy+1), URL: "https://www.familysearch.org/search/record/results?" + q.Encode()})
 	}
@@ -230,7 +257,7 @@ func groups(p *model.Person) []Group {
 	}
 
 	if r&southAfrica != 0 {
-		na := fmt.Sprintf("kin naairs -db %s -q %s", depot(p), shellQuote(strings.ToUpper(surname+" "+first)))
+		na := fmt.Sprintf("kin naairs -db %s -q %s", depot(places), shellQuote(strings.ToUpper(surname+" "+first)))
 		if dy > 0 {
 			na += fmt.Sprintf(" -from %d -to %d", dy-1, dy+3)
 		}
