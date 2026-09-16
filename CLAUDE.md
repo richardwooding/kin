@@ -31,6 +31,7 @@ go run ./cmd/kin viz  -graph /tmp/kin/graph.json -seed seed:me -site examples/si
 go run ./cmd/kin tree -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -records examples/records.json -out /tmp/kin/tree.html
 go run ./cmd/kin map  -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -offline -cache "" -places examples/places.json -out /tmp/kin/map.html
 go run ./cmd/kin report -graph /tmp/kin/graph.json -root seed:me -records examples/records.json -out /tmp/kin/report.html
+go run ./cmd/kin leads -graph /tmp/kin/graph.json -root seed:me -out /tmp/kin/leads.html
 ```
 
 Releases are cut by pushing a `v*` tag; GoReleaser (`.goreleaser.yaml`) builds archives, a ghcr.io image via ko
@@ -43,7 +44,8 @@ are gitignored working directories for real family data and output.
 Source commands (`wikitree`, `eggsa`, `naairs`, `wikidata`, `war`) each write a graph or result file.
 `graph build` merges seed plus source graphs into `data/graph.json`; `graph redact` optionally rewrites it with
 living people reduced to names and links. Renderers (`viz`, `tree`, `map`, `report`) read a graph plus optional
-side files (records, notices, site, places) and write one HTML file.
+side files (records, notices, site, places) and write one HTML file. `leads` reads the graph and writes only
+search URLs and command hints for the ancestors still missing a parent; it makes no requests.
 
 **`internal/model`** is the hub every other package imports. `Person` and `Graph` are the only shared types.
 Parent links live on the child (`Father`, `Mother` ids); spouses are a list. `Graph.Add` merges by id via
@@ -92,6 +94,9 @@ re-queried.
 - Commit messages follow `feat:` / `fix:` / `ci:` / `docs:` prefixes; GoReleaser groups the changelog by them.
 - Tests are plain `testing` with hand-built graphs (see `tree_test.go`'s `threeGen`), no fixtures or golden files.
 - Log to stderr through `logf`; results go only to the `-out` file so stdout stays clean.
+- `internal/leads` only composes URLs. FreeREG, FreeCEN and FreeBMD forbid programs that submit searches and
+  Cornwall OPC allows personal research only, so never add a client for them; a pre-filled link the user opens
+  is the most kin may do, and for the FreeUKGen sites only the search page plus the values to type.
 - Living people are never hidden by the renderers; the `living` flag is carried through, and `kin graph redact`
   (`model.Graph.Redacted`, an allow-list in `Person.Redact`) is the one place that strips dates, places and free
   text from them. A new `Person` field must be classified there as well as added to `Merge`.

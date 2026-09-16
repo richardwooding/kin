@@ -90,6 +90,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin viz -graph data/graph.json -seed seed:me [-site site.json] [-notices …] [-records …] [-probable id] [-tree-url URL]` | — | Writes the ancestry page |
 | `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL]` | — | Writes the pan-and-zoom family tree page |
 | `kin map -graph data/graph.json -root seed:me [-reader id] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL]` | Nominatim (OpenStreetMap) for coordinates | Writes a pan-and-zoom map of the ancestors' birth and death places |
+| `kin leads -graph data/graph.json -root seed:me [-probable id] [-id fs:X] [-out dist/leads.html]` | — | Prints search links for every ancestor still missing a parent, and for the probable ids, on FamilySearch, Cornwall OPC, WikiTree, the National Archives and the South African archives; fetches nothing |
 | `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …]` | — | Writes a printable A4 ancestry report |
 
 Every subcommand prints its flags with `-h`.
@@ -223,6 +224,26 @@ chromium --headless=new --disable-gpu --no-pdf-header-footer \
 The report lists the direct line with Ahnentafel numbers, the children of every
 couple on it, the records consulted, where to order copies, and your notes. To
 link the reports from the dashboard, list them under `links` in the site file.
+
+## Research leads
+
+```sh
+kin leads -graph data/graph.json -root seed:me -probable wt:Smith-1 -out dist/leads.html
+```
+
+`kin leads` walks the ancestry of `-root`, picks out the research frontier, every
+ancestor missing a father or mother plus every `-probable` id, and composes search
+links for each from their names, dates and places. It prints them as text and, with
+`-out`, writes a private page of clickable links. `-id` composes leads for one person
+instead. Nothing is fetched: the links open searches on FamilySearch (by name and
+date, plus the 1881 census of England and Wales or the Cape probate records where
+they apply), the Cornwall Online Parish Clerks database (baptisms, marriages and
+burials, when a place is in Cornwall) and the National Archives' Discovery catalogue,
+and give the `kin wikitree search`, `kin naairs` and `kin eggsa graves` commands to run.
+
+FreeREG, FreeCEN and FreeBMD forbid front-end programs that enter search parameters,
+so for them `kin leads` links only to the search page and prints the values to type.
+Do not add clients for those sites.
 
 ## Sources: terms and manners
 

@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{.Title}}</title>
+<style>
+  :root { --ink: #1c1b19; --ink-2: #5a5752; --line: #dcd8d0; --bg: #faf8f4; --accent: #7a3e9d; }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .note { color: var(--ink-2); margin: 0 0 24px; }
+  article { border-top: 1px solid var(--line); padding: 16px 0; }
+  h2 { font-size: 18px; margin: 0; }
+  .meta { color: var(--ink-2); font-size: 13px; margin: 2px 0 8px; }
+  .why { display: inline-block; font-size: 12px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; margin-right: 6px; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); margin: 12px 0 4px; }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  a { color: var(--accent); }
+  code { font: 13px/1.4 ui-monospace, Menlo, monospace; background: #f0ece4; padding: 1px 5px; border-radius: 4px; }
+</style>
+<div class="wrap">
+<h1>{{.Title}}</h1>
+<p class="note">Private research page. Each link opens a search on another site; nothing here is fetched by kin. Where a site does not accept a pre-filled search, the link opens its search page and the values to type follow.</p>
+{{range .Entries}}
+<article>
+  <h2>{{.Person.Name}} <span class="meta">{{.Person.ID}} · generation {{.Gen}}</span></h2>
+  <p class="meta">{{if .Person.Birth}}born {{.Person.Birth}} {{.Person.BirthPlace}}{{end}}{{if .Person.Death}} · died {{.Person.Death}} {{.Person.DeathPlace}}{{end}}</p>
+  <p>{{range .Why}}<span class="why">{{.}}</span>{{end}}</p>
+  {{range .Groups}}
+  <h3>{{.Service}}</h3>
+  <ul>
+  {{range .Leads}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Label}}</a>{{else}}{{.Label}}{{end}}{{if .Hint}} — <code>{{.Hint}}</code>{{end}}</li>
+  {{end}}</ul>
+  {{end}}
+</article>
+{{end}}
+</div>

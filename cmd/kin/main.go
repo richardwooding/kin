@@ -18,6 +18,7 @@ import (
 	"github.com/richardwooding/kin/internal/geomap"
 	"github.com/richardwooding/kin/internal/graph"
 	"github.com/richardwooding/kin/internal/httpx"
+	"github.com/richardwooding/kin/internal/leads"
 	"github.com/richardwooding/kin/internal/model"
 	"github.com/richardwooding/kin/internal/naairs"
 	"github.com/richardwooding/kin/internal/report"
@@ -72,6 +73,7 @@ func usage() {
   naairs sweep       -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume] -out data/naairs_sweep.json   (score index hits for every ancestor)
   war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
+  leads              -graph data/graph.json -root seed:me [-probable wt:X] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
   version            print the version, commit and build date
 `)
 	os.Exit(2)
@@ -109,6 +111,8 @@ func main() {
 		cmdMap(ctx, os.Args[2:])
 	case "report":
 		cmdReport(os.Args[2:])
+	case "leads":
+		cmdLeads(os.Args[2:])
 	case "naairs":
 		cmdNaairs(ctx, os.Args[2:])
 	default:
@@ -750,6 +754,33 @@ func cmdTree(args []string) {
 }
 
 // ---------------------------------------------------------------- report
+
+func cmdLeads(args []string) {
+	fs := flag.NewFlagSet("leads", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are examined (required unless -id)")
+	only := fs.String("id", "", "compose leads for this one person instead of the frontier")
+	gen := fs.Int("gen", 20, "generations above root to examine")
+	title := fs.String("title", "Research leads", "title of the html page")
+	out := fs.String("out", "", "also write a self-contained html page here (optional)")
+	var probable multi
+	fs.Var(&probable, "probable", "person id whose link to their parents is unproven (repeatable)")
+	fs.Parse(args)
+	if *only == "" {
+		need("root", *root)
+	}
+	g, err := model.Load(*gp)
+	die(err)
+	entries := leads.Build(g, leads.Options{Root: *root, ProbableIDs: probable, Only: *only, MaxGen: *gen})
+	leads.WriteText(os.Stdout, entries)
+	if *out != "" {
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(leads.Render(entries, *title, *out))
+		logf("leads: %d people, wrote %s", len(entries), *out)
+	} else {
+		logf("leads: %d people", len(entries))
+	}
+}
 
 func cmdReport(args []string) {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
