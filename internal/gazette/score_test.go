@@ -122,3 +122,31 @@ func has(list []string, want string) bool {
 	}
 	return false
 }
+
+func TestScoredInTheWordsAroundTheName(t *testing.T) {
+	// a page of an old issue holds dozens of unrelated notices: the word
+	// "deceased" and a place elsewhere on the page say nothing about this name
+	page := Notice{ID: "20", Issue: "24013", Page: "4077", Edition: "London", Year: 1930,
+		Text: "Re JOHN SMITH, Deceased, late of Bermondsey. " + strings.Repeat("other notices about other people ", 12) +
+			" NUNS, Lewis Anthony, appointed inspector of weights"}
+	sc, why := score(t, page, false)
+	if has(why, "deceased estates notice") || has(why, "place Bermondsey") {
+		t.Errorf("a neighbouring notice was read as this one: %v", why)
+	}
+	near := Notice{ID: "21", Issue: "24013", Edition: "London", Year: 1930,
+		Text: "Re NUNS, Lewis Anthony, Deceased, late of Bermondsey, cooper"}
+	sc2, why2 := score(t, near, false)
+	if !has(why2, "deceased estates notice") || !has(why2, "place Bermondsey") {
+		t.Errorf("their own notice should score both: %v", why2)
+	}
+	if sc2 <= sc {
+		t.Errorf("their own notice scored %d, a page mentioning them %d", sc2, sc)
+	}
+	// the edition's own city is on every page and proves nothing
+	london := &model.Person{Name: "Henry Clegg", Given: "Henry", Surname: "Clegg", Birth: "1874", Death: "1931",
+		BirthPlace: "London, England"}
+	n := Notice{ID: "22", Issue: "1", Edition: "London", Year: 1931, Text: "Joseph Henry Clegg, of Rochdale Road, Milnrow, Cotton Mill Manager"}
+	if _, why := Score(london, "London, England | ", n, false); has(why, "place London") {
+		t.Errorf("London is not evidence in the London Gazette: %v", why)
+	}
+}

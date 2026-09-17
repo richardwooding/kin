@@ -100,3 +100,46 @@ func has(list []string, want string) bool {
 	}
 	return false
 }
+
+func TestWillOfAnotherParishIsANamesake(t *testing.T) {
+	// the Bermondsey Cleggs are not the Cleggs of Hull or Haslingden
+	clegg := &model.Person{Name: "William Clegg", Given: "William", Surname: "Clegg",
+		Birth: "1820", Death: "1873", BirthPlace: "Bermondsey, Surrey, England"}
+	places := "Bermondsey, Surrey, England | "
+	for _, desc := range []string{
+		"Will of William Clegg, Wesleyan Minister of Hull , Yorkshire",
+		"Will of William Turner Clegg of Chapel House in Haslingden , Lancashire",
+	} {
+		r := Record{ID: "n", Reference: "PROB 11/1/1", Description: desc, Dates: "1848"}
+		if sc, why := ScorePerson(clegg, r, ScoreOpts{Places: places}); sc != 0 {
+			t.Errorf("%q scored %d (%v); the will names another county", desc, sc, why)
+		}
+	}
+	own := Record{ID: "y", Reference: "PROB 11/2/2",
+		Description: "Will of William Clegg, Tanner of Bermondsey , Surrey", Dates: "1873"}
+	if sc, _ := ScorePerson(clegg, own, ScoreOpts{Places: places}); sc < Keep {
+		t.Error("a will naming their own parish is the strongest lead there is")
+	}
+	// a record naming no residence at all is still worth reporting
+	bare := Record{ID: "z", Reference: "IR 26/1/1", Description: "Abstract of Will of William Clegg", Dates: "1873"}
+	if sc, _ := ScorePerson(clegg, bare, ScoreOpts{Places: places}); sc < 4 {
+		t.Error("an entry that names no place cannot be ruled out")
+	}
+}
+
+func TestSessionRollsAreNotFamilyPapers(t *testing.T) {
+	p := &model.Person{Name: "Thomas Stephens", Given: "Thomas", Surname: "Stephens",
+		Birth: "1869", BirthPlace: "Stithians, Cornwall, England"}
+	places := "Stithians, Cornwall, England | "
+	roll := Record{ID: "r", Reference: "QS/1/7/84-100", Dates: "14th April 1801",
+		Title:       "Sessions held at Truro",
+		Description: "Justices Davies Giddy, John Vivian; presentments from the parishes of Stithians, Gwennap and Redruth; Thomas Penrose of Stithians"}
+	if sc, why := ScorePerson(p, roll, ScoreOpts{Places: places, Frontier: true}); sc != 0 {
+		t.Errorf("a quarter sessions roll from 1801 scored %d for a man born in 1869 (%v)", sc, why)
+	}
+	fam := Record{ID: "f", Reference: "X674", Title: "Stephens family of Stithians.",
+		Description: "Receipted accounts", Dates: "1903-1968"}
+	if sc, _ := ScorePerson(p, fam, ScoreOpts{Places: places, Frontier: true}); sc < Keep {
+		t.Error("a collection named for the family and the parish is a real lead")
+	}
+}

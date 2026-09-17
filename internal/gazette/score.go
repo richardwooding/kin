@@ -22,13 +22,19 @@ func Score(p *model.Person, places string, n Notice, common bool) (int, []string
 	if surname == "" {
 		return 0, nil
 	}
-	words := namematch.Tokens(n.Title + " " + n.Text)
-	switch {
-	case namematch.Exact(words, surname):
-	case n.Scanned() && namematch.OCR(words, surname):
-		// a page scanned from print may have lost a letter
-	default:
+	all := namematch.Tokens(n.Title + " " + n.Text)
+	at := namematch.Index(all, surname)
+	if at < 0 && n.Scanned() && namematch.OCR(all, surname) {
+		at = ocrIndex(all, surname)
+	}
+	if at < 0 {
 		return 0, nil
+	}
+	// A page of an old issue holds dozens of unrelated notices, so everything
+	// but the name is judged in the words around the name, not on the page.
+	words := all
+	if n.Scanned() {
+		words = window(all, at, 18)
 	}
 
 	score, why := 0, []string{"surname"}
@@ -59,6 +65,9 @@ func Score(p *model.Person, places string, n Notice, common bool) (int, []string
 	}
 
 	for _, tok := range namematch.PlaceTokens(places) {
+		if tok == strings.ToUpper(n.Edition) {
+			continue // every page of the London Gazette says London
+		}
 		if namematch.Exact(words, tok) {
 			score += 2
 			why = append(why, "place "+capitalise(tok))
@@ -80,7 +89,7 @@ func Score(p *model.Person, places string, n Notice, common bool) (int, []string
 		}
 	}
 
-	if deceased(n) && first != "" && namematch.Near(words, surname, first, 4) {
+	if deceased(words, n) && first != "" && namematch.Near(words, surname, first, 4) {
 		score += 2
 		why = append(why, "deceased estates notice")
 	}
@@ -98,13 +107,41 @@ func Score(p *model.Person, places string, n Notice, common bool) (int, []string
 	return score, why
 }
 
-// deceased reports whether the notice settles an estate.
-func deceased(n Notice) bool {
+// deceased reports whether this notice, and not some neighbour on the same
+// printed page, settles an estate.
+func deceased(words []string, n Notice) bool {
 	if n.Code == "2903" {
 		return true
 	}
-	s := strings.ToLower(n.Text)
-	return strings.Contains(s, "deceased") || strings.Contains(s, "estate of")
+	for _, w := range words {
+		if w == "DECEASED" {
+			return true
+		}
+	}
+	return false
+}
+
+// window returns the words around position at.
+func window(words []string, at, span int) []string {
+	lo, hi := at-span, at+span+1
+	if lo < 0 {
+		lo = 0
+	}
+	if hi > len(words) {
+		hi = len(words)
+	}
+	return words[lo:hi]
+}
+
+// ocrIndex finds the word one edit away from term.
+func ocrIndex(words []string, term string) int {
+	t := strings.ToUpper(term)
+	for i, w := range words {
+		if namematch.Lev1(w, t) {
+			return i
+		}
+	}
+	return -1
 }
 
 func onlyNames(why []string) bool {

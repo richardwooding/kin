@@ -19,8 +19,13 @@ type ScoreOpts struct {
 	Frontier bool   // a search of the archives that hold records elsewhere
 }
 
-// willOf matches the way the wills and death duty registers are described.
-var willOf = regexp.MustCompile(`(?i)^(?:abstract of )?(?:the )?(will|administration|probate)s? of ([^,]+)`)
+// willOf matches the way the wills and death duty registers are described:
+// "Will of John Wooding, Cooper of Portsmouth, Hampshire".
+var willOf = regexp.MustCompile(`(?i)^(?:abstract of )?(?:the )?(?:will|administration|probate)s? of ([^,.]+)`)
+
+// residence matches the place a will names its testator as living at, which
+// is the strongest thing in the entry for telling namesakes apart.
+var residence = regexp.MustCompile(`(?i)\bof ([A-Z][^,.]*?)\s*,\s*([A-Z][^,.]*)`)
 
 // yearRange reads the covering dates, which run from a single year to a span
 // in brackets: "1763", "09 October 1773", "[1853-1872]".
@@ -65,16 +70,19 @@ func ScorePerson(p *model.Person, r Record, o ScoreOpts) (int, []string) {
 		}
 	}
 
+	named := ""
 	if m := willOf.FindStringSubmatch(r.Description); m != nil && first != "" {
-		named := namematch.Tokens(m[2])
-		if namematch.Exact(named, surname) && namematch.Exact(named, first) {
+		named = m[1]
+		toks := namematch.Tokens(named)
+		if namematch.Exact(toks, surname) && namematch.Exact(toks, first) {
 			score += 2
 			why = append(why, "the record is in their name")
 		}
 	}
 
 	var placed string
-	for _, tok := range namematch.PlaceTokens(o.Places) {
+	mine := namematch.PlaceTokens(o.Places)
+	for _, tok := range mine {
 		if namematch.Exact(words, tok) {
 			placed = tok
 			score += 2
@@ -82,9 +90,16 @@ func ScorePerson(p *model.Person, r Record, o ScoreOpts) (int, []string) {
 			break
 		}
 	}
+	// A will says where its testator lived. When that is somewhere else
+	// entirely, the entry is a namesake's however well the name matches.
+	if placed == "" && named != "" && len(mine) > 0 {
+		if m := residence.FindStringSubmatch(r.Description); m != nil {
+			return 0, nil
+		}
+	}
 	// a family's own papers in a record office are a lead to the whole family,
 	// so they are judged by the parish rather than by one person's dates
-	family := o.Frontier && placed != "" && collection(r.Text())
+	family := o.Frontier && placed != "" && isFamilyCollection(r, surname, placed)
 	if family {
 		score += 2
 		why = append(why, "a family's papers from that parish")
@@ -107,12 +122,26 @@ func ScorePerson(p *model.Person, r Record, o ScoreOpts) (int, []string) {
 	return score, why
 }
 
-// collection reports whether a description is of a family's own papers rather
-// than a single document.
-func collection(desc string) bool {
-	s := strings.ToLower(desc)
-	for _, w := range []string{"family", "papers", "deeds", "estate", "collection", "archive"} {
-		if strings.Contains(s, w) {
+// isFamilyCollection reports whether a record is one family's own papers,
+// named for them and their parish, rather than a session roll or a register
+// that merely mentions the parish among hundreds of others. The test is the
+// record's own title: "Knuckey family of Stithians." names the family, while
+// "Sessions held at Truro" names an administrative series.
+func isFamilyCollection(r Record, surname, parish string) bool {
+	title := r.Title
+	if title == "" {
+		title = r.Description
+	}
+	if len(title) > 120 {
+		return false // a whole roll transcribed into the title is not a family's papers
+	}
+	words := namematch.Tokens(title)
+	if !namematch.Exact(words, surname) || !namematch.Exact(words, parish) {
+		return false
+	}
+	low := strings.ToLower(title)
+	for _, w := range []string{"family", "papers", "deeds", "estate", "collection", "archive", "of "} {
+		if strings.Contains(low, w) {
 			return true
 		}
 	}
