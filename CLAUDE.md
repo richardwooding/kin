@@ -32,6 +32,8 @@ go run ./cmd/kin tree -graph /tmp/kin/graph.json -root seed:me -site examples/si
 go run ./cmd/kin map  -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -offline -cache "" -places examples/places.json -out /tmp/kin/map.html
 go run ./cmd/kin report -graph /tmp/kin/graph.json -root seed:me -records examples/records.json -out /tmp/kin/report.html
 go run ./cmd/kin leads -graph /tmp/kin/graph.json -root seed:me -out /tmp/kin/leads.html
+go run ./cmd/kin gazette sweep -graph /tmp/kin/graph.json -root seed:me -dry-run   # plans the queries, fetches nothing
+go run ./cmd/kin tna sweep -graph /tmp/kin/graph.json -root seed:me -frontier -dry-run
 ```
 
 Releases are cut by pushing a `v*` tag; GoReleaser (`.goreleaser.yaml`) builds archives, a ghcr.io image via ko
@@ -41,7 +43,7 @@ are gitignored working directories for real family data and output.
 ## Architecture
 
 **Pipeline shape.** Every command reads and writes JSON files on disk; nothing is held between commands.
-Source commands (`wikitree`, `eggsa`, `naairs`, `wikidata`, `war`) each write a graph or result file.
+Source commands (`wikitree`, `eggsa`, `naairs`, `wikidata`, `war`, `gazette`, `tna`) each write a graph or result file.
 `graph build` merges seed plus source graphs into `data/graph.json`; `graph redact` optionally rewrites it with
 living people reduced to names and links. Renderers (`viz`, `tree`, `map`, `report`) read a graph plus optional
 side files (records, notices, site, places) and write one HTML file. `leads` reads the graph and writes only
@@ -75,7 +77,7 @@ ancestor reached twice keeps every number but is drawn once under the lowest.
 on a name-and-date match. Each renderer expands this the same way through `graph.Ancestors` and shows a
 distinct style; keep the three in step.
 
-**Source clients** (`wikitree`, `eggsa`, `naairs`, `tna`, `wikidata`, `geo`) are deliberately polite to
+**Source clients** (`wikitree`, `eggsa`, `naairs`, `tna`, `gazette`, `wikidata`, `geo`) are deliberately polite to
 volunteer-run and rate-limited services: fixed delays between calls, back-off on 429, a small worker count,
 and on-disk caches under `data/cache/`. All outbound requests send `httpx.UserAgent()` (and `httpx.AppID` to
 WikiTree). Do not remove delays or caching, and do not add parallelism against these hosts. Each client
@@ -88,6 +90,10 @@ re-queried.
 
 **Scoring packages** (`naairs/sweep.go`, `war`) score archive hits against a person by loose name matching
 (`loose`, `lev1`), dates and spouse surnames. Tests pin the scoring rules; add a case when changing them.
+The British services stem their search terms instead (a search for Wooding returns Wood), so `gazette/score.go`
+and `tna/score.go` use `internal/namematch` and require the surname exactly, relaxing to one edit only for a
+Gazette page scanned from print. `internal/place` holds the region rules `leads` and both sweeps share, and
+`tna.Series` must stay the military series alone because `war` searches every entry of it by default.
 
 ## Conventions
 

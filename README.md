@@ -81,6 +81,10 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin eggsa papers -surname Smith` | eGGSA newspaper extracts | Newspaper notices mentioning the surname; pages are cached under `data/cache/papers` |
 | `kin naairs -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932]` | National Archives of South Africa index | Estate, court and government file references |
 | `kin naairs sweep -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume]` | National Archives of South Africa index | Queries the index once per ancestor (and under married names), scores every hit against names, dates and spouses, and saves the candidates |
+| `kin gazette -q '"Wooding, Charles"' [-from 1880 -to 1905] [-edition London] [-deceased]` | The Gazette | One search of the official notices: deceased estates naming the dead and their executors, bankruptcies, dissolved partnerships, naturalisations, commissions and awards, back to 1665 |
+| `kin gazette sweep -graph data/graph.json -root seed:me [-gen 20] [-max 2] [-delay 1.1s] [-resume] [-dry-run]` | The Gazette | Two or three searches per British or Irish ancestor, scored against their names, places and life window; every answer cached on disk |
+| `kin tna -q "Wooding Portsmouth" [-series "PROB 11"] [-held elsewhere] [-from 1780 -to 1860] [-list]` | UK National Archives Discovery catalogue | One catalogue search: wills, death duty registers, naturalisations, police and navy registers, or the holdings of the archives that keep records elsewhere |
+| `kin tna sweep -graph data/graph.json -root seed:me [-frontier] [-resume] [-dry-run]` | UK National Archives Discovery catalogue | The name-indexed civil series for every British and Irish ancestor and, on the frontier, the county record offices' own catalogues by surname and parish |
 | `kin war -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer]` | UK National Archives Discovery catalogue; NAAIRS | Lists the men of military age among the ancestors and their sons and checks them against the name-indexed imperial military series (Boer War attestations and rolls, First World War medal cards and officers' files, navy and air force registers) and, for the Boer side, the South African archives for 1899 to 1903 |
 | `kin wikidata surname -name Smith`, `kin wikidata place -name Stellenbosch -country Q258` | Wikidata SPARQL and search | People with a family name or born in a place (optional; not needed for the pipeline) |
 | `kin graph build -seed seed.json -in a.json,b.json` | — | Merges graphs, deduplicating people that carry the same WikiTree or Wikidata id and recording the merge aliases |
@@ -277,11 +281,30 @@ Do not add clients for those sites.
 - **OpenStreetMap Nominatim**: `kin map` sends one request per place at one per
   second with the kin user agent, as the usage policy asks, and caches every
   answer. Do not run it in a loop against the same places; the cache is the point.
-- **UK National Archives**: `kin war` uses the public Discovery catalogue API, one
-  query per surname, with a pause between calls. It finds catalogue entries only;
-  the record images (medal cards, attestations) are paid downloads at Kew or via
-  the commercial partners. South African units' own records are not at Kew but at
-  the SANDF Documentation Centre in Pretoria, which answers written requests.
+- **UK National Archives**: `kin war` and `kin tna` use the public Discovery
+  catalogue API, one query per surname or parish, with a pause between calls and,
+  for `kin tna`, an on-disk cache. Besides the military series `kin war` reads,
+  `kin tna` searches the name-indexed civil series (PROB 11 wills to 1858, IR 26
+  death duty abstracts, HO 334 naturalisations, MEPO 4, ADM 139) and, with
+  `-held elsewhere`, the catalogues of the archives that keep records outside Kew,
+  such as Kresen Kernow for Cornwall. Discovery stems its search terms, so a
+  search for Wooding also returns Wood; every hit is scored locally and the
+  surname must match exactly. It finds catalogue entries only; the record images
+  (medal cards, attestations, wills) are paid downloads at Kew or via the
+  commercial partners, and a record office's holdings are read at the office.
+  South African units' own records are not at Kew but at the SANDF Documentation
+  Centre in Pretoria, which answers written requests.
+- **The Gazette**: the United Kingdom's official public record publishes an open
+  JSON feed with no key, and its content is Crown copyright under the Open
+  Government Licence v3.0. Its fair use policy asks callers to be reasonable, so
+  `kin gazette` sends one request every 1.1 seconds, asks at most three per
+  ancestor, caches every answer under `data/cache/gazette` and re-reads the cache
+  on a resumed sweep. Search is stemmed, and issues before about 1998 are optical
+  character recognition of the printed page, so hits are scored locally and should
+  be read against the PDF before they are believed. When you publish a finding
+  that rests on a notice, cite the edition, issue, page and date, and credit
+  "Contains public sector information licensed under the Open Government Licence
+  v3.0".
 - **FamilySearch** is not queried; its index entries and register images are read
   by hand and recorded in the records file with their ark and image references.
 

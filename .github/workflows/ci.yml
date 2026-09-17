@@ -32,6 +32,10 @@ jobs:
           go run ./cmd/kin report -graph /tmp/kin/graph.json -root seed:me -records examples/records.json -out /tmp/kin/report.html
           go run ./cmd/kin leads -graph /tmp/kin/graph.json -root seed:me -out /tmp/kin/leads.html | grep -q 'kin naairs -db'
           grep -q 'cornwall-opc-database.org' /tmp/kin/leads.html || grep -q 'familysearch.org' /tmp/kin/leads.html
+          grep -q 'thegazette.co.uk/all-notices' /tmp/kin/leads.html
+          go run ./cmd/kin gazette sweep -graph /tmp/kin/graph.json -root seed:me -dry-run | grep -q 'all-notices/notice/data.json'
+          go run ./cmd/kin tna sweep -graph /tmp/kin/graph.json -root seed:me -frontier -dry-run | grep -q 'PROB+11'
+          go run ./cmd/kin tna -list | grep -q 'Prerogative Court of Canterbury'
           go run ./cmd/kin tree -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -records examples/records.json -out /tmp/kin/tree.html
           go run ./cmd/kin map -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -offline -cache "" -places examples/places.json -out /tmp/kin/map.html
           grep -q '"label":"Portsmouth' /tmp/kin/map.html
