@@ -169,3 +169,38 @@ func TestOnlyAndOutputs(t *testing.T) {
 		t.Errorf("html output: %s", b)
 	}
 }
+
+func TestGazetteLead(t *testing.T) {
+	g := model.NewGraph()
+	g.Add(&model.Person{ID: "seed:me", Name: "Alex Smith", Father: "seed:f"})
+	g.Add(&model.Person{ID: "seed:f", Name: "William Thomas", Given: "William", Surname: "Thomas",
+		Birth: "1803-09", Death: "1870", BirthPlace: "St Gluvias, Cornwall, England"})
+	g.Add(&model.Person{ID: "seed:m", Name: "Anna Botha", Given: "Anna", Surname: "Botha",
+		Birth: "1840", Death: "1900", BirthPlace: "Graaff-Reinet, Cape Colony"})
+	g.Persons["seed:me"].Mother = "seed:m"
+
+	var uk, sa string
+	for _, e := range Build(g, Options{Root: "seed:me"}) {
+		for _, grp := range e.Groups {
+			if grp.Service != "The Gazette" {
+				continue
+			}
+			if e.Person.ID == "seed:f" {
+				uk = grp.Leads[0].URL
+			} else {
+				sa = grp.Leads[0].URL
+			}
+		}
+	}
+	if sa != "" {
+		t.Errorf("a Cape ancestor gets no Gazette lead, got %q", sa)
+	}
+	if !strings.Contains(uk, "thegazette.co.uk/all-notices/notice?") {
+		t.Errorf("the lead opens the Gazette search page, got %q", uk)
+	}
+	for _, want := range []string{"%22Thomas%2C+William%22", "start-publish-date=1819-01-01", "end-publish-date=1873-12-31", "edition=London"} {
+		if !strings.Contains(uk, want) {
+			t.Errorf("lead %q is missing %q", uk, want)
+		}
+	}
+}

@@ -14,9 +14,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/richardwooding/kin/internal/graph"
 	"github.com/richardwooding/kin/internal/model"
+	"github.com/richardwooding/kin/internal/place"
 )
 
 //go:embed leads.html
@@ -92,18 +94,11 @@ func Build(g *model.Graph, opts Options) []Entry {
 			}
 		}
 	}
-	kids := map[string][]*model.Person{}
-	for _, p := range g.Persons {
-		for _, par := range []string{p.Father, p.Mother} {
-			if par != "" {
-				kids[g.Resolve(par)] = append(kids[g.Resolve(par)], p)
-			}
-		}
-	}
+	kids := place.Kids(g)
 	out := make([]Entry, 0, len(why))
 	for id, reasons := range why {
 		p := g.Persons[id]
-		out = append(out, Entry{Person: p, Gen: gen[id], Why: model.Uniq(reasons), Groups: groups(p, placesOf(g, p, kids[id]))})
+		out = append(out, Entry{Person: p, Gen: gen[id], Why: model.Uniq(reasons), Groups: groups(p, place.PlacesOf(g, p, kids[id]))})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Gen != out[j].Gen {
@@ -112,79 +107,6 @@ func Build(g *model.Graph, opts Options) []Entry {
 		return out[i].Person.Name < out[j].Person.Name
 	})
 	return out
-}
-
-type region uint
-
-const (
-	cornwall region = 1 << iota
-	england
-	southAfrica
-	ireland
-)
-
-// placesOf returns the person's own birth and death places or, when both are
-// blank, the places of their spouses and children, so that a parent known
-// only from a child's baptism still gets the leads for that parish's country.
-func placesOf(g *model.Graph, p *model.Person, kids []*model.Person) string {
-	if p.BirthPlace != "" || p.DeathPlace != "" {
-		return p.BirthPlace + " | " + p.DeathPlace
-	}
-	var parts []string
-	for _, sp := range p.Spouses {
-		if q := g.Persons[g.Resolve(sp)]; q != nil {
-			parts = append(parts, q.BirthPlace, q.DeathPlace)
-		}
-	}
-	for _, k := range kids {
-		parts = append(parts, k.BirthPlace, k.DeathPlace)
-	}
-	return strings.Join(parts, " | ")
-}
-
-// regionsOf reads a place text; a person born in England who died at the
-// Cape belongs to both, and Cornwall implies England.
-func regionsOf(places string) region {
-	s := strings.ToLower(places)
-	var r region
-	if strings.Contains(s, "cornwall") {
-		r |= cornwall | england
-	}
-	if containsAny(s, "england", "wales", "surrey", "middlesex", "london", "kent", "lancashire", "devon") {
-		r |= england
-	}
-	if containsAny(s, "south africa", "cape", "transvaal", "natal", "free state", "orange river", "griqualand") {
-		r |= southAfrica
-	}
-	if strings.Contains(s, "ireland") {
-		r |= ireland
-	}
-	return r
-}
-
-// depot names the National Archives repository for the places a person lived.
-func depot(places string) string {
-	s := strings.ToLower(places)
-	switch {
-	case containsAny(s, "transvaal", "johannesburg", "pretoria", "gauteng"):
-		return "TAB"
-	case containsAny(s, "natal"):
-		return "NAB"
-	case containsAny(s, "free state", "orange"):
-		return "VAB"
-	case containsAny(s, "cape", "wynberg", "mossel bay", "kimberley", "griqualand"):
-		return "KAB"
-	}
-	return "RSA"
-}
-
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
-			return true
-		}
-	}
-	return false
 }
 
 func yearOf(s string) int {
@@ -205,10 +127,10 @@ func groups(p *model.Person, places string) []Group {
 	}
 	surname := p.Surname
 	by, dy := yearOf(p.Birth), yearOf(p.Death)
-	r := regionsOf(places)
+	r := place.Of(places)
 	var out []Group
 
-	if r&cornwall != 0 {
+	if r&place.Cornwall != 0 {
 		var ls []Lead
 		if by > 0 {
 			ls = append(ls, Lead{Label: "baptisms " + span(by-5, by+3), URL: opc("baptisms", first, surname, by-5, by+3)})
@@ -224,10 +146,10 @@ func groups(p *model.Person, places string) []Group {
 	}
 
 	fs := []Lead{{Label: "records by name" + dateLabel(by), URL: familySearch(given, surname, by, p.BirthPlace, "")}}
-	if r&england != 0 && by > 0 && by <= 1881 && (dy == 0 || dy >= 1881) {
+	if r&place.England != 0 && by > 0 && by <= 1881 && (dy == 0 || dy >= 1881) {
 		fs = append(fs, Lead{Label: "1881 census of England and Wales", URL: familySearch(given, surname, by, "", "2562194")})
 	}
-	if r&southAfrica != 0 && dy > 0 && depot(places) == "KAB" {
+	if r&place.SouthAfrica != 0 && dy > 0 && place.Depot(places) == "KAB" {
 		q := url.Values{"q.givenName": {given}, "q.surname": {surname}, "q.deathLikeDate.from": {strconv.Itoa(dy)}, "q.deathLikeDate.to": {strconv.Itoa(dy + 1)}, "f.collectionId": {"2517051"}}
 		fs = append(fs, Lead{Label: "Cape probate records, death " + span(dy, dy+1), URL: "https://www.familysearch.org/search/record/results?" + q.Encode()})
 	}
@@ -239,7 +161,7 @@ func groups(p *model.Person, places string) []Group {
 	}
 	out = append(out, Group{Service: "WikiTree", Leads: []Lead{{Label: "profiles by name", Hint: wt}}})
 
-	if r&england != 0 {
+	if r&place.England != 0 {
 		years := "any years"
 		if by > 0 {
 			years = span(by-5, by+3)
@@ -256,8 +178,20 @@ func groups(p *model.Person, places string) []Group {
 		out = append(out, Group{Service: "England and Wales", Leads: ls})
 	}
 
-	if r&southAfrica != 0 {
-		na := fmt.Sprintf("kin naairs -db %s -q %s", depot(places), shellQuote(strings.ToUpper(surname+" "+first)))
+	if r.UK() {
+		label := "official notices"
+		if by > 0 || dy > 0 {
+			label += " " + span(gazetteFrom(by), gazetteTo(by, dy))
+		}
+		ls := []Lead{{Label: label, URL: gazette(surname, first, by, dy, r.Edition())}}
+		if r&place.Ireland != 0 && r&(place.England|place.Scotland) == 0 {
+			ls[0].Hint = "the Belfast Gazette begins in 1921 and the Dublin Gazette ends in 1922, so earlier Irish notices are elsewhere"
+		}
+		out = append(out, Group{Service: "The Gazette", Leads: ls})
+	}
+
+	if r&place.SouthAfrica != 0 {
+		na := fmt.Sprintf("kin naairs -db %s -q %s", place.Depot(places), shellQuote(strings.ToUpper(surname+" "+first)))
 		if dy > 0 {
 			na += fmt.Sprintf(" -from %d -to %d", dy-1, dy+3)
 		}
@@ -266,10 +200,41 @@ func groups(p *model.Person, places string) []Group {
 			{Label: "eGGSA gravestones", Hint: "kin eggsa graves -surname " + shellQuote(surname)},
 		}})
 	}
-	if r&ireland != 0 {
+	if r&place.Ireland != 0 {
 		out = append(out, Group{Service: "Ireland", Leads: []Lead{{Label: "civil and church records", URL: "https://www.irishgenealogy.ie/en/", Hint: fmt.Sprintf("surname %s, first name %s%s", surname, first, dateLabel(by))}}})
 	}
 	return out
+}
+
+// gazetteFrom and gazetteTo bound a search of the official notices by the
+// years a person could have been named in one: from majority to a few years
+// after death, when the estate notices appear.
+func gazetteFrom(by int) int {
+	if by > 0 {
+		return by + 16
+	}
+	return 1665
+}
+
+func gazetteTo(by, dy int) int {
+	switch {
+	case dy > 0:
+		return dy + 3
+	case by > 0:
+		return by + 100
+	}
+	return time.Now().Year()
+}
+
+// gazette links to The Gazette's own search page, not to the JSON feed.
+func gazette(surname, first string, by, dy int, edition string) string {
+	q := url.Values{"text": {fmt.Sprintf("%q", surname+", "+first)}}
+	q.Set("start-publish-date", fmt.Sprintf("%d-01-01", gazetteFrom(by)))
+	q.Set("end-publish-date", fmt.Sprintf("%d-12-31", gazetteTo(by, dy)))
+	if edition != "" {
+		q.Set("edition", edition)
+	}
+	return "https://www.thegazette.co.uk/all-notices/notice?" + q.Encode()
 }
 
 func dateLabel(by int) string {
