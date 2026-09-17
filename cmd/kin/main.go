@@ -24,6 +24,7 @@ import (
 	"github.com/richardwooding/kin/internal/naairs"
 	"github.com/richardwooding/kin/internal/place"
 	"github.com/richardwooding/kin/internal/report"
+	"github.com/richardwooding/kin/internal/tna"
 	"github.com/richardwooding/kin/internal/tree"
 	"github.com/richardwooding/kin/internal/viz"
 	"github.com/richardwooding/kin/internal/war"
@@ -75,6 +76,8 @@ func usage() {
   naairs sweep       -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume] -out data/naairs_sweep.json   (score index hits for every ancestor)
   gazette            -q '"Wooding, Charles"' [-service all-notices|wills-and-probate|insolvency] [-deceased] [-from 1880 -to 1905] [-edition London] [-out data/gazette_wooding.json]   (The Gazette, the official public record since 1665)
   gazette sweep      -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-max 2] [-delay 1.1s] [-resume] [-dry-run] -out data/gazette.json   (score notices for every British and Irish ancestor)
+  tna                -q "Wooding Portsmouth" [-series "PROB 11"] [-held kew|elsewhere|all] [-from 1780 -to 1860] [-list] [-out data/tna_wooding.json]   (UK National Archives Discovery catalogue)
+  tna sweep          -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-frontier] [-resume] [-dry-run] -out data/tna.json   (wills, death duties and record offices for every British ancestor)
   war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
   leads              -graph data/graph.json -root seed:me [-probable wt:X] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
@@ -121,6 +124,8 @@ func main() {
 		cmdNaairs(ctx, os.Args[2:])
 	case "gazette":
 		cmdGazette(ctx, os.Args[2:])
+	case "tna":
+		cmdTNA(ctx, os.Args[2:])
 	default:
 		usage()
 	}
@@ -1150,4 +1155,164 @@ func trim(s string, n int) string {
 		return s
 	}
 	return string(r[:n-1]) + "…"
+}
+
+// ---------------------------------------------------------------- tna
+
+func cmdTNA(ctx context.Context, args []string) {
+	if len(args) > 0 && args[0] == "sweep" {
+		cmdTNASweep(ctx, args[1:])
+		return
+	}
+	fs := flag.NewFlagSet("tna", flag.ExitOnError)
+	q := fs.String("q", "", "words to find (e.g. \"Wooding Portsmouth\")")
+	var series multi
+	fs.Var(&series, "series", "series code such as \"PROB 11\" (repeatable); empty searches the whole catalogue")
+	held := fs.String("held", "", "kew, elsewhere or all: where the records are kept")
+	from := fs.Int("from", 0, "earliest year of the records (CCYY)")
+	to := fs.Int("to", 0, "latest year of the records (CCYY)")
+	max := fs.Int("max", 2, "pages of results to read")
+	cache := fs.String("cache", "data/cache/tna", "directory of cached answers; empty disables it")
+	list := fs.Bool("list", false, "print the series kin knows and stop")
+	out := fs.String("out", "", "write the records as json")
+	fs.Parse(args)
+	if *list {
+		all := tna.All()
+		for _, code := range tna.Keys(all) {
+			fmt.Printf("%-8s %s\n", code, all[code])
+		}
+		return
+	}
+	need("q", *q)
+	query := tna.Query{Text: *q, Series: series, MaxPages: *max}
+	switch strings.ToLower(*held) {
+	case "kew":
+		query.HeldBy = tna.HeldKew
+	case "elsewhere", "other":
+		query.HeldBy = tna.HeldElsewhere
+	case "all":
+		query.HeldBy = tna.HeldAll
+	case "":
+	default:
+		die(fmt.Errorf("-held must be kew, elsewhere or all"))
+	}
+	if *from > 0 {
+		query.DateFrom = fmt.Sprintf("%d-01-01", *from)
+	}
+	if *to > 0 {
+		query.DateTo = fmt.Sprintf("%d-12-31", *to)
+	}
+	recs, total, err := tna.NewCached(*cache).SearchQuery(ctx, query)
+	die(err)
+	logf("tna: %d records, %d read", total, len(recs))
+	for _, r := range recs {
+		fmt.Printf("%-22s %-22s %s\n", r.Reference, trim(r.Dates, 22), trim(r.Text(), 90))
+		if r.HeldBy != "" {
+			fmt.Printf("%-45s %s\n", "", r.HeldBy)
+		}
+	}
+	if *out != "" {
+		b, _ := json.MarshalIndent(recs, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+		logf("tna: wrote %s", *out)
+	}
+}
+
+// cmdTNASweep searches the civil series, and optionally the archives that hold
+// records elsewhere, for every British and Irish ancestor.
+func cmdTNASweep(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("tna sweep", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are swept (required)")
+	var probable multi
+	fs.Var(&probable, "probable", "person whose link to their parents is unproven (repeatable)")
+	gen := fs.Int("gen", 20, "generations above -root")
+	max := fs.Int("max", 1, "pages of results per query")
+	min := fs.Int("min", tna.Keep, "keep candidates scoring at least this")
+	frontier := fs.Bool("frontier", false, "also search the archives that hold records elsewhere, by surname and parish, for ancestors missing a parent")
+	delay := fs.Duration("delay", 700*time.Millisecond, "pause between requests")
+	cache := fs.String("cache", "data/cache/tna", "directory of cached answers; empty disables it")
+	resume := fs.Bool("resume", false, "skip persons already in -out")
+	dry := fs.Bool("dry-run", false, "print the queries and stop, fetching nothing")
+	out := fs.String("out", "data/tna.json", "results json")
+	fs.Parse(args)
+	need("root", *root)
+	g, err := model.Load(*gp)
+	die(err)
+	opts := tna.SweepOptions{Root: *root, ProbableIDs: probable, MaxGen: *gen, MaxPages: *max,
+		Min: *min, Frontier: *frontier}
+	ids := tna.People(g, opts)
+
+	if *dry {
+		kids := place.Kids(g)
+		seen := map[string]bool{}
+		n := 0
+		for _, id := range ids {
+			p := g.Persons[g.Resolve(id)]
+			fmt.Printf("%s (%s-%s)\n", p.Name, model.Year(p.Birth), model.Year(p.Death))
+			for _, q := range tna.Plan(p, place.PlacesOf(g, p, kids[g.Resolve(id)]), opts) {
+				u := q.URL(1)
+				fmt.Printf("  %s\n", u)
+				if !seen[u] {
+					seen[u] = true
+					n++
+				}
+			}
+		}
+		logf("tna sweep: %d people, %d distinct queries", len(ids), n)
+		return
+	}
+
+	results := map[string]tna.SweepResult{}
+	if *resume {
+		if b, err := os.ReadFile(*out); err == nil {
+			var prev []tna.SweepResult
+			if json.Unmarshal(b, &prev) == nil {
+				for _, r := range prev {
+					if r.Err == "" {
+						results[r.ID] = r
+					}
+				}
+			}
+		}
+	}
+	var todo []string
+	for _, id := range ids {
+		if _, done := results[id]; !done {
+			todo = append(todo, id)
+		}
+	}
+	logf("tna sweep: %d British and Irish ancestors, %d to query", len(ids), len(todo))
+	save := func() {
+		list := make([]tna.SweepResult, 0, len(results))
+		for _, id := range ids {
+			if r, ok := results[id]; ok {
+				list = append(list, r)
+			}
+		}
+		b, _ := json.MarshalIndent(list, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+	}
+	c := tna.NewCached(*cache)
+	c.Delay = *delay
+	done := 0
+	c.Sweep(ctx, g, todo, opts, func(r tna.SweepResult) {
+		done++
+		results[r.ID] = r
+		save()
+		if r.Err != "" {
+			logf("[%d/%d] %s: error %s", done, len(todo), r.Name, r.Err)
+			return
+		}
+		logf("[%d/%d] %s (%s-%s): %d records, %d candidates", done, len(todo), r.Name, model.Year(r.Birth), model.Year(r.Death), r.Total, len(r.Hits))
+		for i, h := range r.Hits {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("  %d  %-20s %s [%s]  %s\n", h.Score, h.Reference, trim(h.Text(), 70), h.Dates, strings.Join(h.Why, ", "))
+		}
+	})
+	logf("tna sweep: wrote %s", *out)
 }
