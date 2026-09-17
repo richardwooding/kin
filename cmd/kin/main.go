@@ -15,12 +15,14 @@ import (
 	"time"
 
 	"github.com/richardwooding/kin/internal/eggsa"
+	"github.com/richardwooding/kin/internal/gazette"
 	"github.com/richardwooding/kin/internal/geomap"
 	"github.com/richardwooding/kin/internal/graph"
 	"github.com/richardwooding/kin/internal/httpx"
 	"github.com/richardwooding/kin/internal/leads"
 	"github.com/richardwooding/kin/internal/model"
 	"github.com/richardwooding/kin/internal/naairs"
+	"github.com/richardwooding/kin/internal/place"
 	"github.com/richardwooding/kin/internal/report"
 	"github.com/richardwooding/kin/internal/tree"
 	"github.com/richardwooding/kin/internal/viz"
@@ -71,6 +73,8 @@ func usage() {
   tree               -graph data/graph.json -root seed:me [-reader seed:me] [-gen 20] [-site site.json] [-records records.json] [-probable wt:X] [-dashboard-url URL] -out dist/tree.html   (pan-and-zoom pedigree)
   naairs             -db TAB -q "SMITH JOHN HENRY" [-from 1930 -to 1932] [-out data/naairs_smith.json]   (National Archives of South Africa index)
   naairs sweep       -graph data/graph.json -from seed:me [-gen 20] [-db RSA] [-delay 3s] [-resume] -out data/naairs_sweep.json   (score index hits for every ancestor)
+  gazette            -q '"Wooding, Charles"' [-service all-notices|wills-and-probate|insolvency] [-deceased] [-from 1880 -to 1905] [-edition London] [-out data/gazette_wooding.json]   (The Gazette, the official public record since 1665)
+  gazette sweep      -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-max 2] [-delay 1.1s] [-resume] [-dry-run] -out data/gazette.json   (score notices for every British and Irish ancestor)
   war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
   leads              -graph data/graph.json -root seed:me [-probable wt:X] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
@@ -115,6 +119,8 @@ func main() {
 		cmdLeads(os.Args[2:])
 	case "naairs":
 		cmdNaairs(ctx, os.Args[2:])
+	case "gazette":
+		cmdGazette(ctx, os.Args[2:])
 	default:
 		usage()
 	}
@@ -987,4 +993,161 @@ func cmdMap(ctx context.Context, args []string) {
 	die(geomap.Render(ctx, g, geomap.Options{Root: *root, Reader: *reader, MaxGen: *gen, CachePath: *cache, PlacesPath: *placesPath, Offline: *offline,
 		DashboardURL: *dash, TreeURL: *treeURL, Site: st, Log: logf}, *out))
 	logf("map: wrote %s", *out)
+}
+
+// ---------------------------------------------------------------- gazette
+
+func cmdGazette(ctx context.Context, args []string) {
+	if len(args) > 0 && args[0] == "sweep" {
+		cmdGazetteSweep(ctx, args[1:])
+		return
+	}
+	fs := flag.NewFlagSet("gazette", flag.ExitOnError)
+	q := fs.String("q", "", "words to find; quote a phrase (e.g. '\"Wooding, Charles\"')")
+	service := fs.String("service", gazette.All, "all-notices, wills-and-probate or insolvency")
+	deceased := fs.Bool("deceased", false, "shorthand for -service wills-and-probate")
+	from := fs.Int("from", 0, "earliest year of publication (CCYY)")
+	to := fs.Int("to", 0, "latest year of publication (CCYY)")
+	edition := fs.String("edition", "", "London, Edinburgh or Belfast")
+	notice := fs.String("type", "", "notice code, e.g. 2903 for deceased estates")
+	max := fs.Int("max", 2, "pages of results to read")
+	cache := fs.String("cache", "data/cache/gazette", "directory of cached answers; empty disables it")
+	out := fs.String("out", "", "write the notices as json")
+	fs.Parse(args)
+	need("q", *q)
+	if *deceased {
+		*service = gazette.Probate
+	}
+	query := gazette.Query{Service: *service, Text: *q, Edition: *edition, Sort: "oldest-date"}
+	if *from > 0 {
+		query.StartPublish = fmt.Sprintf("%d-01-01", *from)
+	}
+	if *to > 0 {
+		query.EndPublish = fmt.Sprintf("%d-12-31", *to)
+	}
+	if *notice != "" {
+		query.NoticeTypes = []string{*notice}
+	}
+	notices, total, err := gazette.New(*cache).Search(ctx, query, *max)
+	die(err)
+	logf("gazette: %d notices, %d read", total, len(notices))
+	for _, n := range notices {
+		where := n.Edition
+		if n.Issue != "" {
+			where = fmt.Sprintf("%s %s/%s", n.Edition, n.Issue, n.Page)
+		}
+		fmt.Printf("%-10s %-18s %-60s %s\n", n.Published, where, trim(n.Title, 60), n.URL)
+		if n.Text != "" {
+			fmt.Printf("           %s\n", trim(n.Text, 150))
+		}
+	}
+	if *out != "" {
+		b, _ := json.MarshalIndent(notices, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+		logf("gazette: wrote %s", *out)
+	}
+}
+
+// cmdGazetteSweep searches the official notices for every British and Irish
+// ancestor, saving after each so a run can resume.
+func cmdGazetteSweep(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("gazette sweep", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are swept (required)")
+	var probable multi
+	fs.Var(&probable, "probable", "person whose link to their parents is unproven (repeatable)")
+	gen := fs.Int("gen", 20, "generations above -root")
+	max := fs.Int("max", 2, "pages of results per query")
+	min := fs.Int("min", gazette.Keep, "keep candidates scoring at least this")
+	probateFrom := fs.Int("probate-from", 1990, "no date-of-death search for deaths before this year")
+	delay := fs.Duration("delay", 1100*time.Millisecond, "pause between requests")
+	cache := fs.String("cache", "data/cache/gazette", "directory of cached answers; empty disables it")
+	resume := fs.Bool("resume", false, "skip persons already in -out")
+	dry := fs.Bool("dry-run", false, "print the queries and stop, fetching nothing")
+	out := fs.String("out", "data/gazette.json", "results json")
+	fs.Parse(args)
+	need("root", *root)
+	g, err := model.Load(*gp)
+	die(err)
+	opts := gazette.Options{Root: *root, ProbableIDs: probable, MaxGen: *gen, MaxPages: *max,
+		Min: *min, ProbateFrom: *probateFrom, Log: logf}
+	ids := gazette.People(g, opts)
+
+	if *dry {
+		kids := place.Kids(g)
+		n := 0
+		for _, id := range ids {
+			p := g.Persons[g.Resolve(id)]
+			qs := gazette.Plan(p, place.PlacesOf(g, p, kids[g.Resolve(id)]), opts)
+			fmt.Printf("%s (%s-%s)\n", p.Name, model.Year(p.Birth), model.Year(p.Death))
+			for _, q := range qs {
+				fmt.Printf("  %s\n", q.URL())
+				n++
+			}
+		}
+		logf("gazette sweep: %d people, %d queries, up to %d requests", len(ids), n, n**max)
+		return
+	}
+
+	results := map[string]gazette.SweepResult{}
+	if *resume {
+		if b, err := os.ReadFile(*out); err == nil {
+			var prev []gazette.SweepResult
+			if json.Unmarshal(b, &prev) == nil {
+				for _, r := range prev {
+					if r.Err == "" {
+						results[r.ID] = r
+					}
+				}
+			}
+		}
+	}
+	var todo []string
+	for _, id := range ids {
+		if _, done := results[id]; !done {
+			todo = append(todo, id)
+		}
+	}
+	logf("gazette sweep: %d British and Irish ancestors, %d to query", len(ids), len(todo))
+	save := func() {
+		list := make([]gazette.SweepResult, 0, len(results))
+		for _, id := range ids {
+			if r, ok := results[id]; ok {
+				list = append(list, r)
+			}
+		}
+		b, _ := json.MarshalIndent(list, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+	}
+	c := gazette.New(*cache)
+	c.Delay = *delay
+	done := 0
+	opts.Log = nil
+	c.Sweep(ctx, g, todo, opts, func(r gazette.SweepResult) {
+		done++
+		results[r.ID] = r
+		save()
+		if r.Err != "" {
+			logf("[%d/%d] %s: error %s", done, len(todo), r.Name, r.Err)
+			return
+		}
+		logf("[%d/%d] %s (%s-%s): %d notices, %d candidates", done, len(todo), r.Name, model.Year(r.Birth), model.Year(r.Death), r.Total, len(r.Hits))
+		for i, h := range r.Hits {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("  %d  %s  %s  %s\n", h.Score, h.Published, trim(h.Title, 50), strings.Join(h.Why, ", "))
+		}
+	})
+	logf("gazette sweep: wrote %s", *out)
+}
+
+func trim(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
 }
