@@ -69,6 +69,11 @@ func (c *Client) do(ctx context.Context, method, u string, form url.Values) (str
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		// the search server answers 503 "No server is available" when it is down;
+		// say so instead of failing later on a page that lists no repositories
+		return "", fmt.Errorf("NAAIRS: %s", resp.Status)
+	}
 	return string(b), err
 }
 
