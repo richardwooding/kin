@@ -6,6 +6,7 @@ package leads
 
 import (
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -26,10 +27,38 @@ var tpl string
 
 // Options selects the people to compose leads for.
 type Options struct {
-	Root        string   // ancestors of this person are examined
-	ProbableIDs []string // people whose link to their parents is unproven
-	Only        string   // one person id instead of the frontier (optional)
-	MaxGen      int      // generations above root to examine; 0 means 20
+	Root        string                // ancestors of this person are examined
+	ProbableIDs []string              // people whose link to their parents is unproven
+	Only        string                // one person id instead of the frontier (optional)
+	MaxGen      int                   // generations above root to examine; 0 means 20
+	Upstream    []string              // id prefixes whose parentless people are another site's ends, not ours (e.g. "wt:")
+	Searched    map[string][]Searched // searches already made, by person id
+}
+
+// Searched records one search already made for a person, so the same lead
+// is not offered again without saying so.
+type Searched struct {
+	Person  string `json:"person"`
+	Service string `json:"service"`
+	When    string `json:"when,omitempty"`
+	Note    string `json:"note,omitempty"`
+}
+
+// LoadSearched reads a json list of Searched entries and indexes it by person id.
+func LoadSearched(path string) (map[string][]Searched, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var list []Searched
+	if err := json.Unmarshal(b, &list); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	out := map[string][]Searched{}
+	for _, x := range list {
+		out[x.Person] = append(out[x.Person], x)
+	}
+	return out, nil
 }
 
 // Lead is one search: a pre-filled URL, or a search page with a hint of what to type or run.
@@ -47,10 +76,11 @@ type Group struct {
 
 // Entry is one person on the research frontier with their leads.
 type Entry struct {
-	Person *model.Person
-	Gen    int
-	Why    []string
-	Groups []Group
+	Person   *model.Person
+	Gen      int
+	Why      []string
+	Groups   []Group
+	Searched []Searched
 }
 
 // Build returns the frontier of root's ancestry: everyone missing a parent,
@@ -72,12 +102,20 @@ func Build(g *model.Graph, opts Options) []Entry {
 		}
 		why[id] = append(why[id], reason)
 	}
+	upstream := func(id string) bool {
+		for _, pre := range opts.Upstream {
+			if pre != "" && strings.HasPrefix(id, pre) {
+				return true
+			}
+		}
+		return false
+	}
 	if opts.Only != "" {
 		add(opts.Only, 0, "requested")
 	} else {
 		for id, d := range graph.Ancestors(g, g.Resolve(opts.Root)) {
 			p := g.Persons[id]
-			if p == nil || d > maxGen {
+			if p == nil || d > maxGen || upstream(id) {
 				continue
 			}
 			if p.Father == "" {
@@ -98,7 +136,12 @@ func Build(g *model.Graph, opts Options) []Entry {
 	out := make([]Entry, 0, len(why))
 	for id, reasons := range why {
 		p := g.Persons[id]
-		out = append(out, Entry{Person: p, Gen: gen[id], Why: model.Uniq(reasons), Groups: groups(p, place.PlacesOf(g, p, kids[id]))})
+		var spouse *model.Person
+		if len(p.Spouses) > 0 {
+			spouse = g.Persons[g.Resolve(p.Spouses[0])]
+		}
+		out = append(out, Entry{Person: p, Gen: gen[id], Why: model.Uniq(reasons),
+			Groups: groups(p, place.PlacesOf(g, p, kids[id]), spouse, kids[id]), Searched: opts.Searched[id]})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Gen != out[j].Gen {
@@ -116,42 +159,158 @@ func yearOf(s string) int {
 
 func span(a, b int) string { return fmt.Sprintf("%d to %d", a, b) }
 
-func groups(p *model.Person, places string) []Group {
+// firstName is the first given name, the form the parish indexes want.
+func firstName(p *model.Person) string {
 	given := strings.TrimSpace(p.Given)
 	if given == "" {
 		given = strings.TrimSpace(strings.TrimSuffix(p.Name, p.Surname))
 	}
-	first := given
 	if i := strings.IndexByte(given, ' '); i > 0 {
-		first = given[:i]
+		return given[:i]
 	}
+	return given
+}
+
+// kidYears is the span of the children's birth years, or zeros.
+func kidYears(kids []*model.Person) (lo, hi int) {
+	for _, k := range kids {
+		if y := yearOf(k.Birth); y > 0 {
+			if lo == 0 || y < lo {
+				lo = y
+			}
+			if y > hi {
+				hi = y
+			}
+		}
+	}
+	return lo, hi
+}
+
+// cornishParish is the parish to search: the person's own Cornish place, else a child's.
+func cornishParish(p *model.Person, kids []*model.Person) string {
+	for _, pl := range []string{p.BirthPlace, p.DeathPlace} {
+		if place.Of(pl)&place.Cornwall != 0 {
+			return place.Parish(pl)
+		}
+	}
+	for _, k := range kids {
+		if place.Of(k.BirthPlace)&place.Cornwall != 0 {
+			return place.Parish(k.BirthPlace)
+		}
+	}
+	return ""
+}
+
+func groups(p *model.Person, places string, spouse *model.Person, kids []*model.Person) []Group {
+	given := strings.TrimSpace(p.Given)
+	if given == "" {
+		given = strings.TrimSpace(strings.TrimSuffix(p.Name, p.Surname))
+	}
+	first := firstName(p)
 	surname := p.Surname
 	by, dy := yearOf(p.Birth), yearOf(p.Death)
 	r := place.Of(places)
+	depot := place.Depot(places)
+	klo, khi := kidYears(kids)
 	var out []Group
 
 	if r&place.Cornwall != 0 {
+		parish := cornishParish(p, kids)
 		var ls []Lead
 		if by > 0 {
-			ls = append(ls, Lead{Label: "baptisms " + span(by-5, by+3), URL: opc("baptisms", first, surname, by-5, by+3)})
-			ls = append(ls, Lead{Label: "marriages " + span(by+15, by+45), URL: opc("marriages", first, surname, by+15, by+45)})
+			ls = append(ls, Lead{Label: "baptisms " + span(by-5, by+3), URL: opc("baptisms", parish, first, surname, by-5, by+3, nil)})
 		} else {
-			ls = append(ls, Lead{Label: "baptisms, any year", URL: opc("baptisms", first, surname, 0, 0)})
-			ls = append(ls, Lead{Label: "marriages, any year", URL: opc("marriages", first, surname, 0, 0)})
+			ls = append(ls, Lead{Label: "baptisms, any year", URL: opc("baptisms", parish, first, surname, 0, 0, nil)})
+		}
+		mfrom, mto := by+15, by+45
+		if klo > 0 {
+			mfrom, mto = klo-15, khi
+		}
+		if by == 0 && klo == 0 {
+			mfrom, mto = 0, 0
+		}
+		mlabel := "marriages"
+		var mq url.Values
+		if spouse != nil {
+			mlabel = "marriage to " + spouse.Name
+			mq = url.Values{"forename2": {firstName(spouse)}, "surname2": {spouse.Surname}}
+		}
+		if mfrom > 0 {
+			mlabel += " " + span(mfrom, mto)
+		} else {
+			mlabel += ", any year"
+		}
+		ls = append(ls, Lead{Label: mlabel, URL: opc("marriages", parish, first, surname, mfrom, mto, mq)})
+		if spouse != nil || len(kids) > 0 {
+			// every child of the couple: the OPC baptism search by both parents' forenames
+			father, mother, family := first, "", surname
+			if spouse != nil {
+				mother = firstName(spouse)
+			}
+			if p.Gender == "female" {
+				father, mother = mother, first
+				family = ""
+				if spouse != nil {
+					family = spouse.Surname
+				} else if len(kids) > 0 {
+					family = kids[0].Surname
+				}
+			}
+			cfrom, cto := klo-3, khi+3
+			if klo == 0 {
+				cfrom, cto = by+18, by+50
+				if by == 0 {
+					cfrom, cto = 0, 0
+				}
+			}
+			q := url.Values{}
+			if father != "" {
+				q.Set("forename2", father)
+			}
+			if mother != "" {
+				q.Set("forename3", mother)
+			}
+			clabel := "children of the couple, baptisms"
+			if cfrom > 0 {
+				clabel += " " + span(cfrom, cto)
+			}
+			ls = append(ls, Lead{Label: clabel, URL: opc("baptisms", parish, "", family, cfrom, cto, q)})
 		}
 		if dy > 0 {
-			ls = append(ls, Lead{Label: "burials " + span(dy-1, dy+1), URL: opc("burials", first, surname, dy-1, dy+1)})
+			ls = append(ls, Lead{Label: "burials " + span(dy-1, dy+1), URL: opc("burials", parish, first, surname, dy-1, dy+1, nil)})
+		} else if by > 0 {
+			ls = append(ls, Lead{Label: "burials " + span(by+20, by+100), URL: opc("burials", parish, first, surname, by+20, by+100, nil)})
 		}
 		out = append(out, Group{Service: "Cornwall OPC", Leads: ls})
 	}
 
 	fs := []Lead{{Label: "records by name" + dateLabel(by), URL: familySearch(given, surname, by, p.BirthPlace, "")}}
-	if r&place.England != 0 && by > 0 && by <= 1881 && (dy == 0 || dy >= 1881) {
-		fs = append(fs, Lead{Label: "1881 census of England and Wales", URL: familySearch(given, surname, by, "", "2562194")})
+	if r&place.England != 0 && by > 0 {
+		for _, c := range []struct {
+			year int
+			id   string
+		}{{1851, "2563939"}, {1861, "1493747"}, {1881, "2562194"}} {
+			if by <= c.year && (dy == 0 || dy >= c.year) {
+				fs = append(fs, Lead{Label: fmt.Sprintf("%d census of England and Wales", c.year), URL: familySearch(given, surname, by, "", c.id)})
+			}
+		}
 	}
-	if r&place.SouthAfrica != 0 && dy > 0 && place.Depot(places) == "KAB" {
-		q := url.Values{"q.givenName": {given}, "q.surname": {surname}, "q.deathLikeDate.from": {strconv.Itoa(dy)}, "q.deathLikeDate.to": {strconv.Itoa(dy + 1)}, "f.collectionId": {"2517051"}}
-		fs = append(fs, Lead{Label: "Cape probate records, death " + span(dy, dy+1), URL: "https://www.familysearch.org/search/record/results?" + q.Encode()})
+	if r&place.SouthAfrica != 0 {
+		fs = append(fs, Lead{Label: "Dutch Reformed Church registers, Cape Town archives" + dateLabel(by), URL: familySearch(given, surname, by, "", "1478678")})
+		if depot == "TAB" {
+			fs = append(fs, Lead{Label: "Hervormde Kerk registers, Pretoria archive" + dateLabel(by), URL: familySearch(given, surname, by, "", "2155416")})
+		}
+		if dy > 0 {
+			probate := map[string][2]string{
+				"KAB": {"2517051", "Cape probate records"},
+				"TAB": {"2520237", "Transvaal probate records"},
+				"VAB": {"3040532", "Orange Free State probate records"},
+			}
+			if c, ok := probate[depot]; ok {
+				q := url.Values{"q.givenName": {given}, "q.surname": {surname}, "q.deathLikeDate.from": {strconv.Itoa(dy)}, "q.deathLikeDate.to": {strconv.Itoa(dy + 1)}, "f.collectionId": {c[0]}}
+				fs = append(fs, Lead{Label: c[1] + ", death " + span(dy, dy+1), URL: "https://www.familysearch.org/search/record/results?" + q.Encode()})
+			}
+		}
 	}
 	out = append(out, Group{Service: "FamilySearch", Leads: fs})
 
@@ -191,7 +350,7 @@ func groups(p *model.Person, places string) []Group {
 	}
 
 	if r&place.SouthAfrica != 0 {
-		na := fmt.Sprintf("kin naairs -db %s -q %s", place.Depot(places), shellQuote(strings.ToUpper(surname+" "+first)))
+		na := fmt.Sprintf("kin naairs -db %s -q %s", depot, shellQuote(strings.ToUpper(surname+" "+first)))
 		if dy > 0 {
 			na += fmt.Sprintf(" -from %d -to %d", dy-1, dy+3)
 		}
@@ -244,11 +403,24 @@ func dateLabel(by int) string {
 	return ", born " + span(by-3, by+3)
 }
 
-func opc(table, first, surname string, from, to int) string {
-	q := url.Values{"forename1": {first}, "surname1": {surname}, "t": {table}, "bf": {"Search"}}
+// opc composes a Cornwall OPC search: parish plus its neighbours when known,
+// years when known, and any extra fields (forename2/forename3 are the
+// parents in a baptism search and the spouse in a marriage search).
+func opc(table, parish, first, surname string, from, to int, extra url.Values) string {
+	q := url.Values{"surname1": {surname}, "t": {table}, "bf": {"Search"}}
+	if first != "" {
+		q.Set("forename1", first)
+	}
+	if parish != "" {
+		q.Set("parish", parish)
+		q.Set("nearby", "1")
+	}
 	if from > 0 {
 		q.Set("year_from", strconv.Itoa(from))
 		q.Set("year_to", strconv.Itoa(to))
+	}
+	for k, v := range extra {
+		q[k] = v
 	}
 	return "https://www.cornwall-opc-database.org/search-database/" + table + "/index.php?" + q.Encode()
 }
@@ -287,6 +459,16 @@ func WriteText(w io.Writer, entries []Entry) {
 			fmt.Fprintf(w, "  d. %s %s", p.Death, p.DeathPlace)
 		}
 		fmt.Fprintf(w, "\n  %s\n", strings.Join(e.Why, "; "))
+		for _, x := range e.Searched {
+			fmt.Fprintf(w, "  already searched: %s", x.Service)
+			if x.When != "" {
+				fmt.Fprintf(w, " (%s)", x.When)
+			}
+			if x.Note != "" {
+				fmt.Fprintf(w, ": %s", x.Note)
+			}
+			fmt.Fprintln(w)
+		}
 		for _, gr := range e.Groups {
 			fmt.Fprintf(w, "  %s\n", gr.Service)
 			for _, l := range gr.Leads {

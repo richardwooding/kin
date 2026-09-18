@@ -232,24 +232,37 @@ link the reports from the dashboard, list them under `links` in the site file.
 ## Research leads
 
 ```sh
-kin leads -graph data/graph.json -root seed:me -probable wt:Smith-1 -out dist/leads.html
+kin leads -graph data/graph.json -root seed:me -probable wt:Smith-1 -upstream wt: -searched seed/searched.json -out dist/leads.html
 ```
 
 `kin leads` walks the ancestry of `-root`, picks out the research frontier, every
 ancestor missing a father or mother plus every `-probable` id, and composes search
-links for each from their names, dates and places (a person with no place of their
-own takes the region of their spouses and children, so a parent known only from a
-baptism still gets that parish's country). It prints them as text and, with
-`-out`, writes a private page of clickable links. `-id` composes leads for one person
-instead. Nothing is fetched: the links open searches on FamilySearch (by name and
-date, plus the 1881 census of England and Wales or the Cape probate records where
-they apply), the Cornwall Online Parish Clerks database (baptisms, marriages and
-burials, when a place is in Cornwall) and the National Archives' Discovery catalogue,
-and give the `kin wikitree search`, `kin naairs` and `kin eggsa graves` commands to run.
+links for each from their names, dates, places, spouses and children (a person with
+no place of their own takes the region of their spouses and children, so a parent
+known only from a baptism still gets that parish's country). It prints them as text
+and, with `-out`, writes a private page of clickable links. `-id` composes leads for
+one person instead. Nothing is fetched: the links open searches on FamilySearch (by
+name and date; the 1851, 1861 and 1881 censuses of England and Wales while the person
+was alive; the Dutch Reformed and, for the Transvaal, the Hervormde church registers;
+the Cape, Transvaal or Free State probate records for the year of death), the Cornwall
+Online Parish Clerks database (baptisms, marriage and burials in the person's own
+parish and its neighbours, the marriage to a known spouse, and every child of the
+couple by both parents' forenames, when a place is in Cornwall) and the National
+Archives' Discovery catalogue, and give the `kin wikitree search`, `kin naairs` and
+`kin eggsa graves` commands to run.
+
+`-upstream wt:` (repeatable) leaves off the frontier the parentless people whose id
+carries that prefix: the ends of WikiTree's own pedigrees are WikiTree's to extend,
+not the family's, and without the flag they swamp the page. A `-probable` id is
+always kept. `-searched` names a json list of searches already made,
+`[{"person": "fs:x", "service": "Cornwall OPC", "when": "2026-09-18", "note": "baptisms 1745 to 1765 Stithians: one hit"}]`,
+which the page shows under each person as "already searched", so a negative result
+is kept and the same search is not offered as new.
 
 FreeREG, FreeCEN and FreeBMD forbid front-end programs that enter search parameters,
 so for them `kin leads` links only to the search page and prints the values to type.
-Do not add clients for those sites.
+The Cornwall OPC allows personal research only, so its links are for the researcher
+to open by hand. Do not add clients for those sites.
 
 ## Sources: terms and manners
 

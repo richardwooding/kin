@@ -80,7 +80,7 @@ func usage() {
   tna sweep          -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-frontier] [-resume] [-dry-run] -out data/tna.json   (wills, death duties and record offices for every British ancestor)
   war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
-  leads              -graph data/graph.json -root seed:me [-probable wt:X] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
+  leads              -graph data/graph.json -root seed:me [-probable wt:X] [-upstream wt:] [-searched seed/searched.json] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
   version            print the version, commit and build date
 `)
 	os.Exit(2)
@@ -774,15 +774,22 @@ func cmdLeads(args []string) {
 	gen := fs.Int("gen", 20, "generations above root to examine")
 	title := fs.String("title", "Research leads", "title of the html page")
 	out := fs.String("out", "", "also write a self-contained html page here (optional)")
-	var probable multi
+	searched := fs.String("searched", "", "json list of searches already made ({person, service, when, note}), shown under each person (optional)")
+	var probable, upstream multi
 	fs.Var(&probable, "probable", "person id whose link to their parents is unproven (repeatable)")
+	fs.Var(&upstream, "upstream", "id prefix whose parentless people are another site's ends and are left off the frontier, e.g. wt: (repeatable)")
 	fs.Parse(args)
 	if *only == "" {
 		need("root", *root)
 	}
 	g, err := model.Load(*gp)
 	die(err)
-	entries := leads.Build(g, leads.Options{Root: *root, ProbableIDs: probable, Only: *only, MaxGen: *gen})
+	var done map[string][]leads.Searched
+	if *searched != "" {
+		done, err = leads.LoadSearched(*searched)
+		die(err)
+	}
+	entries := leads.Build(g, leads.Options{Root: *root, ProbableIDs: probable, Only: *only, MaxGen: *gen, Upstream: upstream, Searched: done})
 	leads.WriteText(os.Stdout, entries)
 	if *out != "" {
 		die(os.MkdirAll(filepath.Dir(*out), 0o755))

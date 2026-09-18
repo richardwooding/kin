@@ -18,6 +18,7 @@
   li { margin: 2px 0; }
   a { color: var(--accent); }
   code { font: 13px/1.4 ui-monospace, Menlo, monospace; background: #f0ece4; padding: 1px 5px; border-radius: 4px; }
+  .done li { color: var(--ink-2); }
 </style>
 <div class="wrap">
 <h1>{{.Title}}</h1>
@@ -27,6 +28,11 @@
   <h2>{{.Person.Name}} <span class="meta">{{.Person.ID}} · generation {{.Gen}}</span></h2>
   <p class="meta">{{if .Person.Birth}}born {{.Person.Birth}} {{.Person.BirthPlace}}{{end}}{{if .Person.Death}} · died {{.Person.Death}} {{.Person.DeathPlace}}{{end}}</p>
   <p>{{range .Why}}<span class="why">{{.}}</span>{{end}}</p>
+  {{if .Searched}}<h3>Already searched</h3>
+  <ul class="done">
+  {{range .Searched}}<li><b>{{.Service}}</b>{{if .When}} ({{.When}}){{end}}{{if .Note}}: {{.Note}}{{end}}</li>
+  {{end}}</ul>
+  {{end}}
   {{range .Groups}}
   <h3>{{.Service}}</h3>
   <ul>
