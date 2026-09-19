@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kin · Tree</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -35,7 +40,9 @@
   .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .hud h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; margin: 0; line-height: 1.15; }
   .hud .sub { font-size: 13px; color: var(--ink-2); margin: 0; }
-  .hud .sub a, .panel a { color: var(--s1); text-decoration-color: currentColor; }
+  .hud .nav { font-size: 13px; margin: 0; }
+  .hud .nav:empty { display: none; }
+  .hud a, .panel a { color: var(--s1); text-decoration-color: currentColor; }
   .toolbar { position: fixed; top: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; z-index: 2; padding: 8px; }
   .toolbar button { font: inherit; font-size: 15px; line-height: 1; min-width: 34px; height: 34px; padding: 0 10px; border: 1px solid var(--ring); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; }
   .toolbar button:hover { border-color: var(--axis); }
@@ -92,26 +99,37 @@
   path.link.stub { stroke-dasharray: 4 3; stroke: var(--axis); }
   g.toggle { cursor: pointer; }
   g.toggle circle { fill: var(--surface); stroke: var(--axis); }
+  g.toggle circle.hit { display: none; fill: none; stroke: none; pointer-events: all; }
   g.toggle text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); text-anchor: middle; pointer-events: none; }
   svg.lod-1 g.toggle, svg.lod-0 g.toggle { display: none; }
+  /* Phones: the toolbar moves to the bottom with a full-width search box and the panel becomes a bottom sheet. */
   @media (max-width: 700px) {
     .hud { max-width: calc(100vw - 24px); }
     .hud .sub { display: none; }
-    .toolbar { top: auto; bottom: 12px; left: 12px; right: 12px; }
-    .search input { width: 140px; }
-    .results { right: auto; left: 0; top: auto; bottom: 40px; width: min(300px, calc(100vw - 40px)); }
-    .panel { top: auto; left: 0; right: 0; width: auto; max-height: 60vh; transform: translateY(100%); border-left: 0; border-top: 1px solid var(--ring); border-radius: 12px 12px 0 0; padding-bottom: 80px; }
+    .toolbar { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; right: 12px; }
+    .search { flex: 1 1 140px; min-width: 0; }
+    .search input { width: 100%; }
+    .results { right: auto; left: 0; top: auto; bottom: calc(100% + 6px); width: min(300px, calc(100vw - 40px)); }
+    .panel { top: auto; left: 0; right: 0; width: auto; max-height: 60vh; max-height: 60dvh; overscroll-behavior: contain; transform: translateY(100%); border-left: 0; border-top: 1px solid var(--ring); border-radius: 12px 12px 0 0; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
     .panel.open { transform: none; }
     .foot { display: none; }
   }
+  /* Touch screens: 42px controls, and 16px in the search box so iOS does not zoom into it. */
+  @media (pointer: coarse) {
+    .toolbar button, .search input { height: 42px; min-width: 42px; font-size: 16px; }
+    .panel .close { width: 40px; height: 40px; }
+    g.toggle circle.hit { display: inline; }
+  }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
-
+</head>
+<body>
 <svg id="tree" class="lod-3" role="img" aria-label="Pedigree chart"><g id="root"><g class="links"></g><g class="nodes"></g></g></svg>
 <div class="hud card">
   <div class="eyebrow" id="eyebrow">Family history · public records</div>
   <h1 id="title">Kin</h1>
   <p class="sub" id="sub"></p>
+  <p class="nav" id="nav"></p>
 </div>
 <div class="toolbar card" role="toolbar" aria-label="Tree controls">
   <button id="zin" title="Zoom in (+)" aria-label="Zoom in">+</button>
@@ -160,7 +178,8 @@
   if (data.truncated) clauses.push(`${fmt(data.truncated)} beyond generation ${data.maxGen} not drawn`);
   if (data.dangling) clauses.push(`${fmt(data.dangling)} parents named but not in the graph`);
   clauses.push(`relationships relative to ${data.readerName}`);
-  sub.innerHTML = esc(clauses.join(' · ')) + (data.dashboardUrl ? ` · <a href="${esc(data.dashboardUrl)}" target="_blank" rel="noopener">Open the dashboard &rarr;</a>` : '');
+  sub.textContent = clauses.join(' · ');
+  if (data.dashboardUrl) document.getElementById('nav').innerHTML = `<a href="${esc(data.dashboardUrl)}" target="_blank" rel="noopener">Open the dashboard &rarr;</a>`;
   document.getElementById('foot').textContent = `Generated ${data.generated} by the kin toolkit. Drag to pan, scroll or pinch to zoom, click a box for details.`;
 
   const BOX_W = 190, BOX_H = 56, ROW = 68, COL = 270, PAD = 10;
@@ -234,6 +253,7 @@
     tg.filter(d => !d.data.stub && parentsOf(d.data.n).length > 0).each(function (d) {
       const g = d3.select(this).attr('transform', `translate(${BOX_W},${BOX_H / 2})`);
       const off = collapsed.has(d.data.node.id);
+      g.append('circle').attr('class', 'hit').attr('r', 15); // larger target on touch screens, see the (pointer: coarse) rule
       g.append('circle').attr('r', 9);
       g.append('text').attr('y', 4).text(off ? `+${subtreeSize(d.data.n)}` : '−');
       g.on('click', e => { e.stopPropagation(); toggle(d.data.node.id); });
@@ -274,7 +294,10 @@
   const fitAll = animate => fitTo(layoutNodes, animate, 'fit', 0, 1.5);
   const centreRoot = () => { const { W, H } = size(), d = layoutNodes[0]; apply(d3.zoomIdentity.translate(W * 0.12 - d.sx, H / 2 - d.sy).scale(1), true); };
   const zoomBy = f => (DUR ? svg.transition().duration(DUR) : svg).call(zoom.scaleBy, f);
-  const flyTo = d => { const { W, H } = size(); const k = Math.max(1, d3.zoomTransform(svgEl).k); apply(d3.zoomIdentity.translate(W / 2 - k * (d.sx + BOX_W / 2), H / 2 - k * d.sy).scale(k), true); };
+  // A found person lands in the free area; on a phone the panel then opens as a bottom sheet over the lower 60%, so aim at the part that stays visible.
+  const flyTo = d => { const f = frame(), k = Math.max(1, d3.zoomTransform(svgEl).k);
+    const cy = matchMedia('(max-width: 700px)').matches ? (f.top + 0.4 * f.H) / 2 : f.top + (f.H - f.top - f.bottom) / 2;
+    apply(d3.zoomIdentity.translate(f.W / 2 - k * (d.sx + BOX_W / 2), cy - k * d.sy).scale(k), true); };
 
   const panel = document.getElementById('panel');
   const hidePanel = () => { panel.classList.remove('open'); panel.setAttribute('aria-hidden', 'true'); };
@@ -381,3 +404,5 @@
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitLabels);
 })();
 </script>
+</body>
+</html>

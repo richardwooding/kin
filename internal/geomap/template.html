@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kin · Map</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -36,6 +41,8 @@
   .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .hud h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; margin: 0; line-height: 1.15; }
   .hud .sub { font-size: 13px; color: var(--ink-2); margin: 0; }
+  .hud .nav { font-size: 13px; margin: 0; }
+  .hud .nav:empty { display: none; }
   .hud a, .panel a { color: var(--s1); text-decoration-color: currentColor; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { font: inherit; font-size: 12.5px; padding: 4px 9px; border: 1px solid var(--ring); border-radius: 999px; background: var(--surface); color: var(--ink-2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
@@ -65,7 +72,7 @@
   .panel li .meta { font-size: 12px; color: var(--ink-2); display: block; }
   .panel .note { font-size: 12.5px; color: var(--ink-2); }
   .foot { position: fixed; left: 12px; bottom: 12px; margin: 0; font-size: 12px; color: var(--muted); max-width: 70ch; z-index: 2; }
-  .tip { position: fixed; pointer-events: none; padding: 6px 9px; font-size: 12.5px; z-index: 4; display: none; max-width: 300px; }
+  .tip { position: fixed; pointer-events: none; padding: 6px 9px; font-size: 12.5px; z-index: 4; display: none; max-width: min(300px, calc(100vw - 16px)); }
   path.land { fill: var(--land); stroke: var(--coast); stroke-linejoin: round; }
   path.border { fill: none; stroke: var(--border); }
   path.arc { fill: none; stroke-opacity: 0.45; }
@@ -74,25 +81,38 @@
   circle.pin.country { fill: none; stroke-dasharray: 3 2; fill-opacity: 0; }
   circle.pin.hit { stroke: var(--ink); }
   text.plabel { font-family: var(--sans); font-weight: 500; fill: var(--ink); paint-order: stroke; stroke: var(--sea); stroke-linejoin: round; pointer-events: none; }
+  /* Phones: the toolbar moves to the bottom with a full-width search box, the line chips scroll sideways and the panel becomes a bottom sheet. */
   @media (max-width: 700px) {
     .hud { max-width: calc(100vw - 24px); }
-    .hud .sub, .hud .chips { display: none; }
-    .toolbar { top: auto; bottom: 12px; left: 12px; right: 12px; }
-    .search input { width: 130px; }
-    .results { right: auto; left: 0; top: auto; bottom: 40px; width: min(320px, calc(100vw - 40px)); }
-    .panel { top: auto; left: 0; right: 0; width: auto; max-height: 60vh; transform: translateY(100%); border-left: 0; border-top: 1px solid var(--ring); border-radius: 12px 12px 0 0; padding-bottom: 80px; }
+    .hud .sub { display: none; }
+    .hud .chips { flex-wrap: nowrap; overflow-x: auto; min-width: 0; scrollbar-width: none; margin: 0 -14px; padding: 2px 14px; }
+    .hud .chips::-webkit-scrollbar { display: none; }
+    .chip { flex: 0 0 auto; }
+    .toolbar { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; right: 12px; }
+    .search { flex: 1 1 140px; min-width: 0; }
+    .search input { width: 100%; }
+    .results { right: auto; left: 0; top: auto; bottom: calc(100% + 6px); width: min(320px, calc(100vw - 40px)); }
+    .panel { top: auto; left: 0; right: 0; width: auto; max-height: 60vh; max-height: 60dvh; overscroll-behavior: contain; transform: translateY(100%); border-left: 0; border-top: 1px solid var(--ring); border-radius: 12px 12px 0 0; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
     .panel.open { transform: none; }
     .foot { display: none; }
+  }
+  /* Touch screens: 42px controls, and 16px in the search box so iOS does not zoom into it. */
+  @media (pointer: coarse) {
+    .toolbar button, .search input { height: 42px; min-width: 42px; font-size: 16px; }
+    .panel .close { width: 40px; height: 40px; }
+    .chip { padding: 8px 12px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   #tip .now { color: var(--muted); font-weight: 400; }
 </style>
-
+</head>
+<body>
 <svg id="map" role="img" aria-label="Map of ancestors' birth and death places"><g id="root"><g class="land"></g><g class="arcs"></g><g class="pins"></g><g class="labels"></g></g></svg>
 <div class="hud card">
   <div class="eyebrow" id="eyebrow">Family history · public records</div>
   <h1 id="title">Kin</h1>
   <p class="sub" id="sub"></p>
+  <p class="nav" id="nav"></p>
   <div class="chips" id="chips"></div>
 </div>
 <div class="toolbar card" role="toolbar" aria-label="Map controls">
@@ -133,8 +153,9 @@
   const clauses = [`${fmt(located)} of ${fmt(persons.length - 1)} ancestors placed on ${fmt(places.length)} locations`];
   if (data.unplaced && data.unplaced.length) clauses.push(`${data.unplaced.length} place names not located`);
   clauses.push(`relationships relative to ${data.readerName}`);
-  const links = [data.dashboardUrl ? `<a href="${esc(data.dashboardUrl)}" target="_blank" rel="noopener">dashboard &rarr;</a>` : '', data.treeUrl ? `<a href="${esc(data.treeUrl)}" target="_blank" rel="noopener">family tree &rarr;</a>` : ''].filter(Boolean).join(' · ');
-  sub.innerHTML = esc(clauses.join(' · ')) + (links ? ' · ' + links : '');
+  sub.textContent = clauses.join(' · ');
+  document.getElementById('nav').innerHTML = [data.dashboardUrl ? `<a href="${esc(data.dashboardUrl)}" target="_blank" rel="noopener">Open the dashboard &rarr;</a>` : '', data.treeUrl ? `<a href="${esc(data.treeUrl)}" target="_blank" rel="noopener">Open the family tree &rarr;</a>` : ''].filter(Boolean).join(' · ');
+  const touch = matchMedia('(hover: none)').matches; // no hover tooltip on touch screens: a tap opens the panel instead
   document.getElementById('foot').textContent = `Generated ${data.generated} by the kin toolkit. Pins are birthplaces and places of death; hollow pins mark a country or region only. Drag to pan, scroll or pinch to zoom, click a pin for the people.`;
 
   // line filter chips
@@ -149,6 +170,15 @@
   // map
   const svg = d3.select('#map'), root = svg.select('#root'), svgEl = svg.node();
   const size = () => { const r = svgEl.getBoundingClientRect(); return { W: Math.max(320, r.width), H: Math.max(320, r.height) }; };
+  // The free area is the viewport minus the overlays (HUD and toolbar at the top,
+  // or the toolbar at the bottom on narrow screens); cy is its vertical centre.
+  const frame = () => {
+    const { W, H } = size();
+    const hud = document.querySelector('.hud').getBoundingClientRect(), tb = document.querySelector('.toolbar').getBoundingClientRect();
+    const top = Math.max(hud.bottom, tb.top < H / 2 ? tb.bottom : 0) + 12;
+    const bottom = (tb.top >= H / 2 ? H - tb.top : 0) + 24;
+    return { W, H, top, bottom, h: H - top - bottom, cy: top + (H - top - bottom) / 2 };
+  };
   const world = JSON.parse(document.getElementById('world').textContent);
   const land = topojson.feature(world, world.objects.land);
   const borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
@@ -158,6 +188,7 @@
   let cur = size();
   const setup = () => {
     cur = size();
+    cur.cy = frame().cy;
     const { W, H } = cur;
     projection.fitExtent([[0, 0], [W, H]], { type: 'Sphere' });
     root.select('g.land').selectAll('path').data([land]).join('path').attr('class', 'land').attr('d', path);
@@ -190,8 +221,8 @@
     root.select('g.pins').selectAll('circle.pin').data(current, d => d.i).join('circle')
       .attr('class', d => `pin ${d.pl.precision}`).attr('cx', d => projection([d.pl.lon, d.pl.lat])[0]).attr('cy', d => projection([d.pl.lon, d.pl.lat])[1])
       .attr('fill', d => lineColour(d.line)).attr('stroke', d => d.pl.precision === 'country' ? lineColour(d.line) : 'var(--surface)')
-      .on('pointerenter', (e, d) => tip(e, `<strong>${esc(d.pl.label)}</strong>${d.pl.modern ? ` <span class="now">now ${esc(d.pl.modern)}</span>` : ''}<br>${d.pl.births.length} born, ${d.pl.deaths.length} died${d.pl.precision !== 'town' ? ` · ${d.pl.precision} only` : ''}`))
-      .on('pointermove', (e, d) => tip(e)).on('pointerleave', () => tip())
+      .on('pointerenter', (e, d) => touch || tip(e, `<strong>${esc(d.pl.label)}</strong>${d.pl.modern ? ` <span class="now">now ${esc(d.pl.modern)}</span>` : ''}<br>${d.pl.births.length} born, ${d.pl.deaths.length} died${d.pl.precision !== 'town' ? ` · ${d.pl.precision} only` : ''}`))
+      .on('pointermove', (e, d) => touch || tip(e)).on('pointerleave', () => tip())
       .on('click', (e, d) => { e.stopPropagation(); showPlace(d.i); });
     root.select('g.labels').selectAll('text.plabel').data(current, d => d.i).join('text').attr('class', 'plabel')
       .attr('x', d => projection([d.pl.lon, d.pl.lat])[0]).attr('y', d => projection([d.pl.lon, d.pl.lat])[1]).text(d => d.pl.label.split(',')[0]);
@@ -209,13 +240,14 @@
   };
 
   const tipEl = document.getElementById('tip');
-  const tip = (e, html) => { if (!e) { tipEl.style.display = 'none'; return; } if (html) tipEl.innerHTML = html; tipEl.style.display = 'block'; const { W } = size(); const x = Math.min(W - 320, e.clientX + 14); tipEl.style.left = x + 'px'; tipEl.style.top = (e.clientY + 14) + 'px'; };
+  const tip = (e, html) => { if (!e) { tipEl.style.display = 'none'; return; } if (html) tipEl.innerHTML = html; tipEl.style.display = 'block'; const { W, H } = size();
+    tipEl.style.left = Math.max(8, Math.min(e.clientX + 14, W - tipEl.offsetWidth - 8)) + 'px'; tipEl.style.top = Math.max(8, Math.min(e.clientY + 14, H - tipEl.offsetHeight - 8)) + 'px'; };
 
   const fitLonLat = (lon0, lat0, lon1, lat1, animate) => {
-    const { W, H } = size();
+    const f = frame();
     const [x0, y0] = projection([lon0, lat1]), [x1, y1] = projection([lon1, lat0]);
-    const scale = Math.min(6000, 0.85 / Math.max((x1 - x0) / (W - 24), (y1 - y0) / (H - 140)));
-    const t = d3.zoomIdentity.translate(W / 2 - scale * (x0 + x1) / 2, (H + 60) / 2 - scale * (y0 + y1) / 2).scale(scale);
+    const scale = Math.min(6000, 0.85 / Math.max((x1 - x0) / (f.W - 24), (y1 - y0) / f.h));
+    const t = d3.zoomIdentity.translate(f.W / 2 - scale * (x0 + x1) / 2, f.cy - scale * (y0 + y1) / 2).scale(scale);
     (animate && DUR ? svg.transition().duration(DUR) : svg).call(zoom.transform, t);
   };
   const fitPlaces = (pred, animate) => {
@@ -227,7 +259,10 @@
   document.getElementById('fit-sa').onclick = () => fitPlaces(pl => pl.lat < -20 && pl.lon > 10 && pl.lon < 35, true);
   document.getElementById('fit-eu').onclick = () => fitPlaces(pl => pl.lat > 35 && pl.lon > -12 && pl.lon < 25, true);
   document.getElementById('arcs').onclick = e => { showArcs = !showArcs; e.currentTarget.classList.toggle('on', showArcs); render(); };
-  const flyTo = (lon, lat, scale) => { const { W, H } = size(); const [x, y] = projection([lon, lat]); const s = Math.max(scale || 60, k); (DUR ? svg.transition().duration(DUR) : svg).call(zoom.transform, d3.zoomIdentity.translate(W / 2 - s * x, (H + 60) / 2 - s * y).scale(s)); };
+  // A place flown to lands in the free area; on a phone the panel then opens as a bottom sheet over the lower 60%, so aim at the part that stays visible.
+  const flyTo = (lon, lat, scale) => { const f = frame(); const [x, y] = projection([lon, lat]); const s = Math.max(scale || 60, k);
+    const cy = matchMedia('(max-width: 700px)').matches ? (f.top + 0.4 * f.H) / 2 : f.cy;
+    (DUR ? svg.transition().duration(DUR) : svg).call(zoom.transform, d3.zoomIdentity.translate(f.W / 2 - s * x, cy - s * y).scale(s)); };
 
   // panel
   const panel = document.getElementById('panel');
@@ -244,7 +279,7 @@
     let html = `<button class="close" type="button" aria-label="Close">×</button><h2>${esc(pl.label)}</h2><p class="sub">${pl.modern ? `now ${esc(pl.modern)} · ` : ''}${esc(pl.names.join(' · '))}${pl.precision !== 'town' ? ` · located to the ${pl.precision} only` : ''}</p>`;
     if (pl.births.length) html += `<h3>Born here (${pl.births.length})</h3><ul>${sortGen(pl.births).map(p => personRow(p.id, 'born')).join('')}</ul>`;
     if (pl.deaths.length) html += `<h3>Died here (${pl.deaths.length})</h3><ul>${sortGen(pl.deaths).map(p => personRow(p.id, 'died')).join('')}</ul>`;
-    panel.innerHTML = html; panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false'); panel.scrollTop = 0;
+    panel.innerHTML = html; panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false'); panel.scrollTop = 0; tip();
     panel.querySelector('.close').onclick = hidePanel;
     panel.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => showPerson(b.dataset.goto));
     root.selectAll('circle.pin').classed('hit', d => d.i === i);
@@ -300,13 +335,13 @@
   window.addEventListener('resize', () => {
     const t = d3.zoomTransform(svg.node());
     const old = cur;
-    const centre = projection.invert([(old.W / 2 - t.x) / t.k, ((old.H + 60) / 2 - t.y) / t.k]);
+    const centre = projection.invert([(old.W / 2 - t.x) / t.k, (old.cy - t.y) / t.k]);
     const oldScale = projection.scale();
     setup(); render();
     if (!centre || !isFinite(centre[0])) return;
     const k2 = t.k * oldScale / projection.scale();
     const [x, y] = projection(centre);
-    svg.call(zoom.transform, d3.zoomIdentity.translate(cur.W / 2 - k2 * x, (cur.H + 60) / 2 - k2 * y).scale(k2));
+    svg.call(zoom.transform, d3.zoomIdentity.translate(cur.W / 2 - k2 * x, cur.cy - k2 * y).scale(k2));
   });
 
   render();
@@ -318,3 +353,5 @@
   else fitPlaces(() => true, false);
 })();
 </script>
+</body>
+</html>

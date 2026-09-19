@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kin</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -42,8 +47,12 @@
   h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
   .lede { max-width: 66ch; color: var(--ink-2); margin: 0; }
   .lede strong { color: var(--ink); font-weight: 600; }
-  .links { margin: 0; font-size: 14px; }
-  .links a { color: var(--s1); font-weight: 500; text-decoration-color: currentColor; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; font-size: 14px; }
+  .links[hidden], .links a[hidden] { display: none; }
+  #site-links { display: contents; }
+  .links a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--axis); border-radius: 999px; background: var(--surface); color: var(--ink); text-decoration: none; font-weight: 500; }
+  .links a:hover, .links a:focus-visible { border-color: var(--ink); outline: none; }
+  #tree-link, #map-link { border-color: var(--s1); color: var(--s1); }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
   .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 6px; padding: 14px 16px; display: grid; gap: 2px; }
   .tile .v { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
@@ -82,7 +91,7 @@
   .legend .l3::before { background: var(--s3); }
   .legend .l0::before { background: var(--ink); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--ink); }
   #net { position: relative; }
-  #net svg { width: 100%; height: min(72vh, 640px); display: block; background: var(--surface); border-radius: 4px; touch-action: none; }
+  #net svg { width: 100%; height: min(72vh, 640px); display: block; background: var(--surface); border-radius: 4px; touch-action: pan-y; }
   #net .node { stroke: var(--surface); stroke-width: 2; cursor: pointer; }
   #net .node.c1 { fill: var(--s1); }
   #net .node.c3 { fill: var(--s3); }
@@ -90,7 +99,9 @@
   #net .plink { stroke: var(--link); stroke-width: 1; }
   #net .slink { stroke: var(--link-spouse); stroke-width: 1.5; }
   #net text.lbl { font-size: 11px; fill: var(--ink-2); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
-  .tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--ring); border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 24px rgba(0,0,0,0.12); max-width: 300px; display: none; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--ring); border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 24px rgba(0,0,0,0.12); max-width: min(300px, calc(100% - 16px)); display: none; }
+  .tip.pinned { pointer-events: auto; }
+  .tip a { color: var(--s1); }
   .tip b { font-weight: 600; }
   .tip .m { color: var(--ink-2); }
   .tip .mono { color: var(--muted); }
@@ -103,15 +114,36 @@
   .hint { color: var(--muted); font-size: 12px; }
   button.more { margin-top: 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
   button.more:hover, button.more:focus-visible { border-color: var(--ink); outline: none; }
+  /* Phones: tighter gutters, the network drawn on request at full height, and each wide table row stacked into a card
+     (name in bold, then the other columns as labelled lines; "half" cells share a row). */
+  @media (max-width: 640px) {
+    .wrap { padding-inline: 14px; gap: 20px; }
+    .card { padding: 14px; }
+    #net svg { height: 80vh; }
+    #net svg[hidden] { display: none; }
+    table.stack, table.stack tbody { display: block; }
+    table.stack thead { display: none; }
+    table.stack tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--grid); }
+    table.stack tr[hidden] { display: none; }
+    table.stack td { display: block; grid-column: 1 / -1; border: 0; padding: 0; text-align: left; }
+    table.stack td.half { grid-column: auto; }
+    table.stack td:empty { display: none; }
+    table.stack td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+    table.stack td.gen { font-size: 11px; color: var(--muted); }
+    table.stack td.gen::before { display: inline; margin-right: 4px; }
+    table.stack td.key { font-weight: 600; font-size: 14px; }
+    table.stack td.sub { color: var(--ink-2); font-size: 13px; }
+  }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header>
     <div class="eyebrow" id="eyebrow">Family history · public records</div>
     <h1 id="title">Kin</h1>
     <p class="lede" id="lede"></p>
-    <p class="links" id="links" hidden><a id="tree-link" target="_blank" rel="noopener" hidden>Open the family tree &rarr;</a> <a id="map-link" target="_blank" rel="noopener" hidden>Open the map &rarr;</a> <span id="site-links"></span></p>
+    <nav class="links" id="links" hidden aria-label="Pages"><a id="tree-link" target="_blank" rel="noopener" hidden>Family tree</a><a id="map-link" target="_blank" rel="noopener" hidden>Map</a><span id="site-links"></span></nav>
   </header>
 
   <section class="tiles" id="tiles"></section>
@@ -138,7 +170,7 @@
 
   <section class="card">
     <h2>The family network</h2>
-    <p class="sub">Your direct ancestors and the people documented within two steps of them by birth or marriage. Hover for details, click to open the source record, drag to rearrange.</p>
+    <p class="sub">Your direct ancestors and the people documented within two steps of them by birth or marriage. Hover or tap for details, open the source record from the tooltip, drag to rearrange.</p>
     <div class="legend">
       <span class="l0">You and your parents</span>
       <span class="l1">Direct ancestor</span>
@@ -169,14 +201,14 @@
   <section class="card" id="sec-order">
     <h2>Where to order copies</h2>
     <p class="sub">The archive references on this page are index entries. The files themselves are held as below and copies are supplied on request, quoting the full reference, for example "KAB MOOC 6/9/17813 ref 6448/50".</p>
-    <div class="tablewrap"><table>
+    <div class="tablewrap"><table class="stack">
       <thead><tr><th>Reference prefix</th><th>Holding</th><th>How to order</th></tr></thead>
       <tbody>
-        <tr><td class="mono">KAB …</td><td>Cape Town Archives Repository, 72 Roeland Street, Cape Town. Cape estate files (MOOC), Supreme Court cases (CSC), deeds (DOC), Attorney-General and Treasury papers (AG, T).</td><td>Written request to the repository with the reference; a photocopy or scan fee applies. Contact details are on the National Archives site under <a href="http://www.national.archives.gov.za/contact_info.htm" target="_blank" rel="noopener">Contact information</a>. Researchers may also read files in the reading room.</td></tr>
-        <tr><td class="mono">TAB …</td><td>National Archives Repository, 24 Hamilton Street, Arcadia, Pretoria. Transvaal estate files (MHG), Witwatersrand court cases (WLD), Transvaal government papers.</td><td>Same procedure, addressed to the Pretoria repository. Estate files usually open with the death notice; ask for that page if the whole file is not needed.</td></tr>
-        <tr><td class="mono">TBE …</td><td>Port Elizabeth Archives Repository. Eastern Cape court and local records (GSEE).</td><td>Same procedure, addressed to Port Elizabeth.</td></tr>
-        <tr id="order-anchor"><td>FamilySearch images</td><td>Cape probate 1822 to 1990 and Transvaal probate 1869 to 1961 are photographed and free to view online, so files in those ranges need not be ordered at all; only the Anglican register images are restricted, and those can be viewed free at any FamilySearch centre or affiliate library.</td><td>Open the record page and step through the film; the folder and image numbers on this page locate each entry.</td></tr>
-        <tr><td>England</td><td>Birth, marriage and death entries: General Register Office, gro.gov.uk, digital images for a fee. Cornish parish registers: Kresen Kernow, the Cornwall archive at Redruth; the free Online Parish Clerks transcriptions used here cite the originals held there.</td><td>GRO orders are placed from the index row; Kresen Kernow supplies copies of register pages on request.</td></tr>
+        <tr><td class="mono key">KAB …</td><td data-label="Holding">Cape Town Archives Repository, 72 Roeland Street, Cape Town. Cape estate files (MOOC), Supreme Court cases (CSC), deeds (DOC), Attorney-General and Treasury papers (AG, T).</td><td data-label="How to order">Written request to the repository with the reference; a photocopy or scan fee applies. Contact details are on the National Archives site under <a href="http://www.national.archives.gov.za/contact_info.htm" target="_blank" rel="noopener">Contact information</a>. Researchers may also read files in the reading room.</td></tr>
+        <tr><td class="mono key">TAB …</td><td data-label="Holding">National Archives Repository, 24 Hamilton Street, Arcadia, Pretoria. Transvaal estate files (MHG), Witwatersrand court cases (WLD), Transvaal government papers.</td><td data-label="How to order">Same procedure, addressed to the Pretoria repository. Estate files usually open with the death notice; ask for that page if the whole file is not needed.</td></tr>
+        <tr><td class="mono key">TBE …</td><td data-label="Holding">Port Elizabeth Archives Repository. Eastern Cape court and local records (GSEE).</td><td data-label="How to order">Same procedure, addressed to Port Elizabeth.</td></tr>
+        <tr id="order-anchor"><td class="key">FamilySearch images</td><td data-label="Holding">Cape probate 1822 to 1990 and Transvaal probate 1869 to 1961 are photographed and free to view online, so files in those ranges need not be ordered at all; only the Anglican register images are restricted, and those can be viewed free at any FamilySearch centre or affiliate library.</td><td data-label="How to order">Open the record page and step through the film; the folder and image numbers on this page locate each entry.</td></tr>
+        <tr><td class="key">England</td><td data-label="Holding">Birth, marriage and death entries: General Register Office, gro.gov.uk, digital images for a fee. Cornish parish registers: Kresen Kernow, the Cornwall archive at Redruth; the free Online Parish Clerks transcriptions used here cite the originals held there.</td><td data-label="How to order">GRO orders are placed from the index row; Kresen Kernow supplies copies of register pages on request.</td></tr>
       </tbody>
     </table></div>
   </section>
@@ -219,6 +251,9 @@
   const fmt = n => n.toLocaleString('en-GB');
   const isRecord = p => hasSrc(p, 'familysearch') || hasSrc(p, 'user');
   const status = p => probable.has(p.id) ? 'probable' : isRecord(p) ? 'record' : hasSrc(p, 'eggsa') ? 'gravestone' : 'tree';
+  // Phones get the narrow chart layout and the network on request; touch screens get tap-to-inspect instead of hover.
+  const narrow = matchMedia('(max-width: 640px)').matches;
+  const touch = matchMedia('(hover: none)').matches;
   const pill = p => { const s = status(p); return `<span class="pill ${s === 'record' ? 'ok' : s === 'probable' ? 'prob' : ''}">${s}</span>`; };
 
   // ancestors of the seed with generation numbers (parents = 1)
@@ -247,11 +282,11 @@
   document.getElementById('title').textContent = site.title || 'Kin';
   document.getElementById('eyebrow').textContent = site.eyebrow || 'Family history · public records';
   document.getElementById('order-anchor').insertAdjacentHTML('beforebegin',
-    (site.orderingRows || []).map(r => `<tr><td>${esc(r.prefix)}</td><td>${esc(r.holding)}</td><td>${esc(r.how)}</td></tr>`).join(''));
+    (site.orderingRows || []).map(r => `<tr><td class="key">${esc(r.prefix)}</td><td data-label="Holding">${esc(r.holding)}</td><td data-label="How to order">${esc(r.how)}</td></tr>`).join(''));
 
   if (data.treeUrl) { document.getElementById('links').hidden = false; const a = document.getElementById('tree-link'); a.hidden = false; a.href = data.treeUrl; }
   if (data.mapUrl) { document.getElementById('links').hidden = false; const a = document.getElementById('map-link'); a.hidden = false; a.href = data.mapUrl; }
-  if ((site.links || []).length) { document.getElementById('links').hidden = false; document.getElementById('site-links').innerHTML = site.links.map(l => `<a href="${esc(l.href)}">${esc(l.label)} &rarr;</a>`).join(' '); }
+  if ((site.links || []).length) { document.getElementById('links').hidden = false; document.getElementById('site-links').innerHTML = site.links.map(l => `<a href="${esc(l.href)}">${esc(l.label)}</a>`).join(''); }
 
   // lede + tiles
   document.getElementById('lede').innerHTML =
@@ -304,10 +339,12 @@
     }).join('');
   })();
 
-  // bar chart helper
+  // bar chart helper: category labels sit in a left gutter, or above each bar on narrow screens
+  // where the 520-unit canvas would otherwise be scaled down to unreadable text
   function bars(el, tableEl, rows, opts) {
-    const W = 520, barH = 20, gap = 14, left = opts.left || 150, right = 64, top = 8;
-    const H = top + rows.length * (barH + gap) + 24;
+    const W = narrow ? 360 : 520, barH = 20, gap = narrow ? 18 : 14, labelH = narrow ? 16 : 0, left = narrow ? 4 : (opts.left || 150), right = narrow ? 72 : 64, top = 8;
+    const pitch = barH + gap + labelH;
+    const H = top + rows.length * pitch + 24;
     const max = d3.max(rows, r => Math.max(r.v, r.of || 0)) || 1;
     const x = d3.scaleLinear().domain([0, max]).nice().range([left, W - right]);
     const svg = d3.create('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', opts.label);
@@ -317,13 +354,13 @@
     svg.append('g').selectAll('text').data(ticks).join('text')
       .attr('x', d => x(d)).attr('y', H - 8).attr('text-anchor', 'middle').text(d => fmt(d));
     svg.append('line').attr('class', 'baseline').attr('x1', x(0)).attr('x2', x(0)).attr('y1', top).attr('y2', H - 24);
-    const rowG = svg.append('g').selectAll('g').data(rows).join('g').attr('transform', (d, i) => `translate(0,${top + i * (barH + gap)})`);
-    rowG.append('path')
+    const rowG = svg.append('g').selectAll('g').data(rows).join('g').attr('transform', (d, i) => `translate(0,${top + i * pitch})`);
+    rowG.append('path').attr('transform', `translate(0,${labelH})`)
       .attr('d', d => { const w = Math.max(0, x(d.v) - x(0)), r = Math.min(4, w);
         return `M${x(0)},0 H${x(0) + w - r} a${r},${r} 0 0 1 ${r},${r} V${barH - r} a${r},${r} 0 0 1 -${r},${r} H${x(0)} Z`; })
       .attr('fill', 'var(--s1)').append('title').text(d => `${d.k}: ${fmt(d.v)}${d.of ? ' of ' + fmt(d.of) : ''}`);
-    rowG.append('text').attr('class', 'cat').attr('x', left - 10).attr('y', barH / 2 + 4).attr('text-anchor', 'end').text(d => d.k);
-    rowG.append('text').attr('class', 'val').attr('x', d => x(d.v) + 6).attr('y', barH / 2 + 4).text(d => fmt(d.v) + (d.of ? ` of ${fmt(d.of)}` : ''));
+    rowG.append('text').attr('class', 'cat').attr('x', narrow ? x(0) : left - 10).attr('y', narrow ? 11 : barH / 2 + 4).attr('text-anchor', narrow ? 'start' : 'end').text(d => d.k);
+    rowG.append('text').attr('class', 'val').attr('x', d => x(d.v) + 6).attr('y', labelH + barH / 2 + 4).text(d => fmt(d.v) + (d.of ? ` of ${fmt(d.of)}` : ''));
     el.appendChild(svg.node());
     const hasOf = rows.some(r => r.of);
     tableEl.innerHTML = `<table><thead><tr><th>${esc(opts.col)}</th><th class="num">Found</th>${hasOf ? '<th class="num">Possible</th>' : ''}</tr></thead><tbody>` +
@@ -349,8 +386,8 @@
   const placeRows = d3.rollups(ancestors.map(a => region(a.p.birthPlace)).filter(Boolean), v => v.length, d => d).map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
   bars(document.getElementById('chart-place'), document.getElementById('table-place'), placeRows, { label: 'Birthplaces of documented ancestors', col: 'Region', left: 190 });
 
-  // network
-  (function network() {
+  // network: the people within two steps of the ancestors, force-laid; drawn on load, or on request on a phone
+  const buildNetwork = () => {
     const adj = new Map();
     const addEdge = (a, b) => { if (!adj.has(a)) adj.set(a, new Set()); adj.get(a).add(b); if (!adj.has(b)) adj.set(b, new Set()); adj.get(b).add(a); };
     persons.forEach(p => [p.father, p.mother, ...(p.spouses || [])].forEach(id => { if (id && byId.has(id)) addEdge(p.id, id); }));
@@ -368,11 +405,14 @@
       [p.father, p.mother].forEach(id => { if (id && have.has(id)) links.push({ source: id, target: p.id, t: 'p' }); });
       (p.spouses || []).forEach(id => { const k = [p.id, id].sort().join('|'); if (have.has(id) && !seen.has(k)) { seen.add(k); links.push({ source: p.id, target: id, t: 's' }); } });
     });
+    return { nodes, links, HOPS };
+  };
+  const drawNetwork = ({ nodes, links, HOPS }) => {
     const isSeedLine = p => p.id === data.seed || (seed && (p.id === seed.father || p.id === seed.mother));
     const cls = p => isSeedLine(p) ? 'seed' : anc.has(p.id) ? 'c1' : 'c3';
     const labelled = p => isSeedLine(p) || (anc.has(p.id) && anc.get(p.id) <= 3);
     document.getElementById('net-hint').textContent =
-      `${nodes.length} people shown (your ancestors and everyone within ${HOPS} steps of them), ${links.filter(l => l.t === 'p').length} parent links, ${links.filter(l => l.t === 's').length} marriages. Drag to rearrange, scroll to zoom.`;
+      `${nodes.length} people shown (your ancestors and everyone within ${HOPS} steps of them), ${links.filter(l => l.t === 'p').length} parent links, ${links.filter(l => l.t === 's').length} marriages. Drag to rearrange, pinch or scroll to zoom.`;
     const svgEl = document.querySelector('#net svg');
     const svg = d3.select(svgEl);
     const bbox = svgEl.getBoundingClientRect();
@@ -401,24 +441,55 @@
     const label = root.append('g').selectAll('text').data(nodes.filter(labelled)).join('text').attr('class', 'lbl')
       .attr('dy', -11).attr('text-anchor', 'middle').text(d => d.name + (year(d.birth) ? ` (${year(d.birth)})` : ''));
     const tip = document.getElementById('tip');
-    node.on('pointerenter', (e, d) => {
+    const place = e => { const box = svgEl.getBoundingClientRect();
+      tip.style.left = Math.max(0, Math.min(e.clientX - box.left + 14, box.width - tip.offsetWidth - 8)) + 'px';
+      tip.style.top = Math.max(0, Math.min(e.clientY - box.top + 14, box.height - tip.offsetHeight - 8)) + 'px'; };
+    const show = (e, d) => {
       const dates = [year(d.birth), year(d.death)].filter(Boolean).join(' to ');
       const r = rel[d.id];
       tip.innerHTML = `<b>${esc(d.name)}</b>${dates ? ` <span class="m">${esc(dates)}</span>` : ''}` +
         (d.birthPlace ? `<br><span class="m">b. ${esc(d.birthPlace)}</span>` : '') +
         (r ? `<br><b>${esc(r.label)}</b> of ${esc(seed ? seed.name : 'seed')}` : '') +
-        `<br><span class="mono">${esc(d.id)} · ${esc((d.sources || []).join(', '))}</span>`;
+        `<br><span class="mono">${esc(d.id)} · ${esc((d.sources || []).join(', '))}</span>` +
+        (touch && d.url ? `<br><a href="${esc(d.url)}" target="_blank" rel="noopener">Open the source record &rarr;</a>` : '');
       tip.style.display = 'block';
-    }).on('pointermove', e => { const box = svgEl.getBoundingClientRect(); tip.style.left = Math.min(e.clientX - box.left + 14, box.width - 310) + 'px'; tip.style.top = (e.clientY - box.top + 14) + 'px'; })
-      .on('pointerleave', () => { tip.style.display = 'none'; })
-      .on('click', (e, d) => { if (d.url) window.open(d.url, '_blank', 'noopener'); });
+      place(e);
+    };
+    const open = d => { if (d.url) window.open(d.url, '_blank', 'noopener'); };
+    // With a mouse the tooltip follows the pointer and a click opens the source; on touch the first tap
+    // pins the tooltip (which then carries the link) and a second tap on the same node opens the source.
+    let pinned = null;
+    const unpin = () => { pinned = null; tip.classList.remove('pinned'); tip.style.display = 'none'; };
+    node.on('pointerenter', (e, d) => { if (!touch) show(e, d); })
+      .on('pointermove', e => { if (!touch) place(e); })
+      .on('pointerleave', () => { if (!touch) tip.style.display = 'none'; })
+      .on('click', (e, d) => {
+        if (!touch) { open(d); return; }
+        e.stopPropagation();
+        if (pinned === d) { open(d); return; }
+        pinned = d; tip.classList.add('pinned'); show(e, d);
+      });
+    svg.on('click', unpin);
     sim.on('tick', () => {
       if (fits === 0 && sim.alpha() < 0.05) fit();
       link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       node.attr('cx', d => d.x).attr('cy', d => d.y);
       label.attr('x', d => d.x).attr('y', d => d.y);
     }).on('end', () => { if (fits < 2) fit(); });
-  })();
+  };
+  {
+    const net = buildNetwork();
+    const svgEl = document.querySelector('#net svg');
+    if (!narrow) drawNetwork(net);
+    else {
+      // A force layout of thousands of people is a hairball on a phone and costs the battery, so draw it only when asked.
+      svgEl.setAttribute('hidden', ''); // SVG elements have no hidden property, so set the attribute
+      document.getElementById('net-hint').textContent = `${fmt(net.nodes.length)} people, drawn on request on small screens.`;
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'more'; btn.textContent = `Draw the network (${fmt(net.nodes.length)} people)`;
+      btn.addEventListener('click', () => { btn.remove(); svgEl.removeAttribute('hidden'); drawNetwork(net); });
+      document.getElementById('net').prepend(btn);
+    }
+  }
 
   // tables
   const LIMIT = 40;
@@ -440,8 +511,8 @@
   const place = s => (s || '').replace(/, (South Africa|England|United Kingdom)$/, '');
 
   collapsible(document.getElementById('table-anc'),
-    `<table><thead><tr><th class="num">Gen.</th><th>Name</th><th>Relation</th><th>Born</th><th>Died</th><th>Known from</th><th>Records</th></tr></thead><tbody>` +
-    ancestors.map((a, i) => `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="num">${a.g}</td><td>${esc(a.p.name)}</td><td>${esc(rel[a.p.id] ? rel[a.p.id].label : genLabel(a.g))}</td><td>${esc(year(a.p.birth))}${a.p.birthPlace ? `<br><span class="hint">${esc(place(a.p.birthPlace))}</span>` : ''}</td><td>${esc(year(a.p.death))}${a.p.deathPlace ? `<br><span class="hint">${esc(place(a.p.deathPlace))}</span>` : ''}</td><td>${pill(a.p)}</td><td>${srcLinks(a.p)}</td></tr>`).join('') +
+    `<table class="stack"><thead><tr><th class="num">Gen.</th><th>Name</th><th>Relation</th><th>Born</th><th>Died</th><th>Known from</th><th>Records</th></tr></thead><tbody>` +
+    ancestors.map((a, i) => `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="num half gen" data-label="Gen.">${a.g}</td><td class="key">${esc(a.p.name)}</td><td class="sub">${esc(rel[a.p.id] ? rel[a.p.id].label : genLabel(a.g))}</td><td class="half" data-label="Born">${esc(year(a.p.birth))}${a.p.birthPlace ? `<br><span class="hint">${esc(place(a.p.birthPlace))}</span>` : ''}</td><td class="half" data-label="Died">${esc(year(a.p.death))}${a.p.deathPlace ? `<br><span class="hint">${esc(place(a.p.deathPlace))}</span>` : ''}</td><td class="half" data-label="Known from">${pill(a.p)}</td><td class="half" data-label="Records">${srcLinks(a.p)}</td></tr>`).join('') +
     '</tbody></table>', ancestors.length);
 
   const ancestorsOf = id => { const out = new Set(); const q = [id]; while (q.length) { const p = byId.get(q.pop()); if (!p) continue; [p.father, p.mother].forEach(a => { if (a && !out.has(a)) { out.add(a); q.push(a); } }); } return out; };
@@ -452,21 +523,21 @@
   const saRows = persons.filter(p => isFamily(p) && p.id !== data.seed && !p.id.startsWith('seed:') && (isSA(p) || hasSrc(p, 'eggsa')))
     .sort((a, b) => (year(a.birth) || '9999').localeCompare(year(b.birth) || '9999') || (a.name || '').localeCompare(b.name || ''));
   if (saRows.length) collapsible(document.getElementById('table-sa'),
-    `<table><thead><tr><th>Name</th><th class="num">Born</th><th class="num">Died</th><th>Place</th><th>Relation</th>${siteFlags.length ? '<th>Flags</th>' : ''}<th>Records</th></tr></thead><tbody>` +
+    `<table class="stack"><thead><tr><th>Name</th><th class="num">Born</th><th class="num">Died</th><th>Place</th><th>Relation</th>${siteFlags.length ? '<th>Flags</th>' : ''}<th>Records</th></tr></thead><tbody>` +
     saRows.map((p, i) => {
       const pl = p.birthPlace || (p.deathPlace ? 'buried ' + place(p.deathPlace) : '');
       const r = rel[p.id];
-      return `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td>${esc(p.name)}</td><td class="num">${esc(year(p.birth))}</td><td class="num">${esc(year(p.death))}</td><td>${esc(pl)}</td><td>${r ? esc(r.label) : comps[p.id] === seedComp ? 'in your network' : ''}</td>${siteFlags.length ? `<td>${flagsFor(p)}</td>` : ''}<td>${srcLinks(p)}</td></tr>`;
+      return `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="key">${esc(p.name)}</td><td class="num half" data-label="Born">${esc(year(p.birth))}</td><td class="num half" data-label="Died">${esc(year(p.death))}</td><td data-label="Place">${esc(pl)}</td><td class="sub">${r ? esc(r.label) : comps[p.id] === seedComp ? 'in your network' : ''}</td>${siteFlags.length ? `<td class="half" data-label="Flags">${flagsFor(p)}</td>` : ''}<td class="half" data-label="Records">${srcLinks(p)}</td></tr>`;
     }).join('') + '</tbody></table>', saRows.length);
   else document.getElementById('table-sa').innerHTML = '<p class="sub">No South African records loaded.</p>';
 
   if (records.length) {
     document.getElementById('sec-records').hidden = false;
     document.getElementById('table-records').innerHTML =
-      `<table><thead><tr><th class="num">Date</th><th>Event</th><th>People</th><th>Place</th><th>What it shows</th><th>Source</th></tr></thead><tbody>` +
+      `<table class="stack"><thead><tr><th class="num">Date</th><th>Event</th><th>People</th><th>Place</th><th>What it shows</th><th>Source</th></tr></thead><tbody>` +
       records.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(r => {
         const who = byId.get(r.person);
-        return `<tr><td class="num">${esc(r.date || '')}</td><td>${esc(r.event || '')}</td><td>${esc(r.names || (who ? who.name : ''))}</td><td>${esc(r.place || '')}</td><td>${esc(r.detail || '')}${r.image ? `<br><span class="mono">${esc(r.image)}</span>` : ''}</td><td><a href="${esc(r.url)}" target="_blank" rel="noopener">FamilySearch</a><br><span class="hint">${esc(r.collection || '')}</span></td></tr>`;
+        return `<tr><td class="num half" data-label="Date">${esc(r.date || '')}</td><td class="half" data-label="Event">${esc(r.event || '')}</td><td class="key">${esc(r.names || (who ? who.name : ''))}</td><td data-label="Place">${esc(r.place || '')}</td><td data-label="Shows">${esc(r.detail || '')}${r.image ? `<br><span class="mono">${esc(r.image)}</span>` : ''}</td><td data-label="Source"><a href="${esc(r.url)}" target="_blank" rel="noopener">FamilySearch</a><br><span class="hint">${esc(r.collection || '')}</span></td></tr>`;
       }).join('') + '</tbody></table>';
   }
 
@@ -494,3 +565,5 @@
     `Graph of ${fmt(persons.length)} people: ${counts}. Generated by the kin toolkit from public records; living people appear only where those sources already publish them or where the family supplied them.`;
 })();
 </script>
+</body>
+</html>

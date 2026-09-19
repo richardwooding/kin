@@ -179,7 +179,7 @@ func TestRenderSmoke(t *testing.T) {
 	}
 	b, _ := os.ReadFile(out)
 	s := string(b)
-	for _, want := range []string{"Smith Kin", `"generations":2`, "cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js", `"dashboardUrl":"https://example.test/dash"`} {
+	for _, want := range []string{"Smith Kin", `"generations":2`, "cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js", `"dashboardUrl":"https://example.test/dash"`, `<meta name="viewport"`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("page lacks %q", want)
 		}

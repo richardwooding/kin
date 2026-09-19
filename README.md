@@ -95,7 +95,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL]` | — | Writes the pan-and-zoom family tree page |
 | `kin map -graph data/graph.json -root seed:me [-reader id] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL]` | Nominatim (OpenStreetMap) for coordinates | Writes a pan-and-zoom map of the ancestors' birth and death places |
 | `kin leads -graph data/graph.json -root seed:me [-probable id] [-id fs:X] [-out dist/leads.html]` | — | Prints search links for every ancestor still missing a parent, and for the probable ids, on FamilySearch, Cornwall OPC, WikiTree, the National Archives and the South African archives; fetches nothing |
-| `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …]` | — | Writes a printable A4 ancestry report |
+| `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …] [-dashboard-url URL]` | — | Writes a printable A4 ancestry report that also reads as a web page |
 
 Every subcommand prints its flags with `-h`.
 
@@ -180,7 +180,9 @@ for the detail panel (dates, places, relationship, Ahnentafel numbers, sources,
 other spouses, children of the couple, attached records). The toggle on a box's
 right edge collapses that branch; the choice is remembered in the browser. The
 accent colour is the status: blue for a person known from a record, amber and
-dashed for a probable link, green for a gravestone, grey for a tree entry.
+dashed for a probable link, green for a gravestone, grey for a tree entry. On a
+phone the toolbar sits at the bottom of the screen and the detail panel opens
+as a sheet over the lower part of it.
 
 The dashboard and the tree can link to each other. Because published pages
 often live at two different addresses, the links are given as absolute URLs:
@@ -197,6 +199,8 @@ people at a place and coloured by grandparent line; hollow pins mark a place
 that resolved only to a region or country; thin arcs join each person's
 birthplace to their place of death. Click a pin for the people, a person for
 their journey, and use the toolbar to fit all places, southern Africa or Europe.
+On a phone the toolbar sits at the bottom, the line chips scroll sideways and
+the panel opens as a sheet over the lower part of the screen.
 
 Coordinates come from OpenStreetMap's Nominatim geocoder, one query per distinct
 place string at its permitted rate of one a second, and are cached in the file
@@ -227,7 +231,10 @@ chromium --headless=new --disable-gpu --no-pdf-header-footer \
 
 The report lists the direct line with Ahnentafel numbers, the children of every
 couple on it, the records consulted, where to order copies, and your notes. To
-link the reports from the dashboard, list them under `links` in the site file.
+link the reports from the dashboard, list them under `links` in the site file;
+`-dashboard-url URL` puts a link back to the dashboard at the top of the page.
+The print layout is A4; on screen the same file reads as a web page, and on a
+phone each table row stacks into a card, while the PDF is unchanged.
 
 ## Research leads
 

@@ -810,6 +810,7 @@ func cmdReport(args []string) {
 	maxGen := fs.Int("gen", 8, "generations above root")
 	records := fs.String("records", "records.json", "hand-collected record citations json (optional)")
 	out := fs.String("out", "dist/report.html", "output html")
+	dash := fs.String("dashboard-url", "", "URL of the dashboard, linked at the top of the page on screen only (optional)")
 	var probable, notes multi
 	fs.Var(&probable, "probable", "person id from which upward the line is only probable (repeatable)")
 	fs.Var(&notes, "note", "note to print under open questions (repeatable)")
@@ -825,7 +826,7 @@ func cmdReport(args []string) {
 	}
 	die(os.MkdirAll(filepath.Dir(*out), 0o755))
 	die(report.Render(g, report.Options{Root: *root, Reader: *reader, Title: *title, Subtitle: *subtitle, MaxGen: *maxGen,
-		ProbableIDs: probable, Notes: notes, RecordsPath: *records}, *out))
+		ProbableIDs: probable, Notes: notes, RecordsPath: *records, DashboardURL: *dash}, *out))
 	logf("report: wrote %s", *out)
 }
 

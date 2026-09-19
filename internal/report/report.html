@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
@@ -32,23 +33,49 @@
   .records td:first-child { white-space: nowrap; }
   .foot { margin-top: 18pt; padding-top: 6pt; border-top: 1px solid var(--rule); font-size: 8.5pt; color: var(--muted); }
   a { color: inherit; }
+  .nav { display: none; }
+  /* On screen the report reads as a web page: a measure, larger type and links in colour. Print keeps the A4 rules above. */
+  @media screen {
+    body { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; font-size: 16px; line-height: 1.5; }
+    .eyebrow { font-size: 11px; } h1 { font-size: 26px; } .sub { font-size: 16px; }
+    h2 { font-size: 19px; margin: 28px 0 10px; } h3 { font-size: 15px; }
+    table { font-size: 14px; } th { font-size: 11px; } th, td { padding: 6px 8px 6px 0; }
+    .tag { font-size: 10px; } .src, .foot { font-size: 12px; }
+    a { color: var(--accent); }
+    .nav { display: block; margin: 0 0 14px; font-family: "IBM Plex Sans", "Source Sans Pro", "DejaVu Sans", "Liberation Sans", Arial, sans-serif; font-size: 14px; }
+    .nav a { text-decoration: none; }
+  }
+  /* Narrow screens stack each table row into a card with the column names as labels. */
+  @media screen and (max-width: 640px) {
+    thead { display: none; }
+    table, tbody, tr, td { display: block; }
+    tr { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+    td { border: 0; padding: 0 0 3px; }
+    td:empty { display: none; }
+    td[data-label]::before { content: attr(data-label); display: block; font: 600 10px/1.5 "IBM Plex Sans", "Source Sans Pro", "DejaVu Sans", "Liberation Sans", Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    table.line tr { display: grid; grid-template-columns: 2.2em minmax(0, 1fr); column-gap: 8px; }
+    table.line td.n { grid-row: 1 / span 5; width: auto; font-size: 12px; padding-top: 2px; }
+    table.records td:nth-child(-n+2) { display: inline; padding-right: 6px; }
+    table.records td:first-child { white-space: normal; }
+  }
 </style></head><body>
 
+{{if .DashboardURL}}<p class="nav"><a href="{{.DashboardURL}}">&larr; Back to the dashboard</a></p>{{end}}
 <p class="eyebrow">Ancestry report · prepared for {{.Reader}}</p>
 <h1>{{.Title}}</h1>
 <p class="sub">{{.Subtitle}}</p>
 
 <h2>Direct line</h2>
-<table>
+<table class="line">
   <thead><tr><th></th><th>Person</th><th>Born</th><th>Died</th><th>Relation to {{.Reader}}</th><th>Status</th></tr></thead>
   <tbody>
   {{range .Line}}<tr>
     <td class="n">{{.Ahnentafel}}</td>
     <td><span class="name">{{.Person.Name}}</span>{{if .Sources}}<br><span class="src">{{range $i, $s := .Sources}}{{if $i}} · {{end}}<a href="{{$s.URL}}">{{$s.Label}}</a>{{end}}</span>{{end}}</td>
-    <td>{{date .Person.Birth}}{{if .Person.BirthPlace}}<br><span class="gen">{{place .Person.BirthPlace}}</span>{{end}}</td>
-    <td>{{date .Person.Death}}{{if .Person.DeathPlace}}<br><span class="gen">{{place .Person.DeathPlace}}</span>{{end}}</td>
-    <td class="gen">{{cap .Generation}}</td>
-    <td><span class="tag {{.Status}}">{{.Status}}</span></td>
+    <td data-label="Born">{{date .Person.Birth}}{{if .Person.BirthPlace}}<br><span class="gen">{{place .Person.BirthPlace}}</span>{{end}}</td>
+    <td data-label="Died">{{date .Person.Death}}{{if .Person.DeathPlace}}<br><span class="gen">{{place .Person.DeathPlace}}</span>{{end}}</td>
+    <td class="gen" data-label="Relation">{{cap .Generation}}</td>
+    <td data-label="Status"><span class="tag {{.Status}}">{{.Status}}</span></td>
   </tr>{{end}}
   </tbody>
 </table>
@@ -67,8 +94,8 @@
   <thead><tr><th>Date</th><th>Event</th><th>People and place</th><th>What it shows</th></tr></thead>
   <tbody>{{range .Records}}<tr>
     <td>{{.Date}}</td><td>{{.Event}}</td>
-    <td>{{.Names}}<br><span class="gen">{{.Place}}</span></td>
-    <td>{{.Detail}}<br><span class="src"><a href="{{.URL}}">{{.Collection}}</a>{{if .Image}} · {{.Image}}{{end}}</span></td>
+    <td data-label="People">{{.Names}}<br><span class="gen">{{.Place}}</span></td>
+    <td data-label="Shows">{{.Detail}}<br><span class="src"><a href="{{.URL}}">{{.Collection}}</a>{{if .Image}} · {{.Image}}{{end}}</span></td>
   </tr>{{end}}</tbody>
 </table>
 {{end}}

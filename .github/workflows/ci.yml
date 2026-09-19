@@ -41,6 +41,7 @@ jobs:
           grep -q '"label":"Portsmouth' /tmp/kin/map.html
           grep -q 'Smith Kin' /tmp/kin/index.html && grep -q 'jones-line.html' /tmp/kin/index.html
           grep -q 'Smith Kin' /tmp/kin/tree.html && grep -q '"id":"seed:mm"' /tmp/kin/tree.html
+          for f in index tree map report; do grep -q 'name="viewport"' /tmp/kin/$f.html; done
       - name: goreleaser config check
         uses: goreleaser/goreleaser-action@v7
         with:
