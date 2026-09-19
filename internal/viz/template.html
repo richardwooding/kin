@@ -232,19 +232,19 @@
 <script>
 (function () {
   const data = JSON.parse(document.getElementById('data').textContent);
-  const persons = data.persons || [];
+  const persons = data.persons || []; // only the people the page draws; data.counts describes the whole graph
   const byId = new Map(persons.map(p => [p.id, p]));
   const seed = byId.get(data.seed);
-  const rel = data.relations || {};
+  const rel = data.relations || {}; // id -> relationship label
   const comps = data.components || {};
+  const counts = data.counts || { persons: persons.length, network: 0, sources: {} };
   const probable = new Set(data.probable || []);
   const records = data.records || [];
   const notices = data.notices || [];
   const site = data.site || {};
   const siteFlags = (site.flags || []).map(f => ({ ...f, re: f.namePattern ? new RegExp(f.namePattern, 'i') : null }));
 
-  const SA = /south africa|cape colony|cape province|cape town|transvaal|natal|orange free|gauteng|springs|johannesburg|pretoria|durban|boksburg|benoni|germiston|brakpan|witwatersrand|ceres|wynberg|maitland|paarl|durbanville|port elizabeth|kenwyn|roodepoort|maraisburg|krugersdorp|plettenberg|mossel bay|stellenbosch|drakenstein|caep|kaap/i;
-  const isSA = p => SA.test(p.birthPlace || '') || SA.test(p.deathPlace || '');
+  const urlOf = p => p.url || (p.wikitree ? 'https://www.wikitree.com/wiki/' + p.wikitree : '');
   const hasSrc = (p, s) => (p.sources || []).includes(s);
   const year = s => (s || '').slice(0, 4).replace(/\D/g, '') || '';
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -266,16 +266,11 @@
   const earliest = dated.length ? dated.reduce((m, a) => year(a.p.birth) < year(m.p.birth) ? a : m) : null;
   const provenCount = ancestors.filter(a => status(a.p) === 'record').length;
   const seedComp = comps[data.seed];
-  const networkSize = Object.values(comps).filter(c => c === seedComp).length;
+  const networkSize = counts.network;
   const genName = g => g === 1 ? 'parents' : g === 2 ? 'grandparents' : g === 3 ? 'great-grandparents' : `${g - 2}x great-grandparents`;
   const genLabel = g => g === 1 ? 'parent' : g === 2 ? 'grandparent' : g === 3 ? 'great-grandparent' : `${g - 2}x great-grandparent`;
 
-  const familyNames = new Set();
-  ancestors.filter(a => a.g <= 3).forEach(a => { if (a.p.surname) familyNames.add(a.p.surname.toLowerCase()); });
-  if (seed && seed.surname) familyNames.add(seed.surname.toLowerCase());
-  const familyRe = new RegExp('^(' + [...familyNames].map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')s?$', 'i');
-  const isFamily = p => familyRe.test((p.surname || '').trim());
-  const familyLabel = [...familyNames].map(n => n[0].toUpperCase() + n.slice(1)).join(', ');
+  const familyLabel = (data.family || []).join(', ');
 
   // site text: title, eyebrow, ordering rows
   document.title = site.title || 'Kin';
@@ -300,7 +295,7 @@
     [maxGen, 'generations deep', earliest ? `back to ${year(earliest.p.birth)}` : ''],
     [records.length, 'records collected', 'FamilySearch entries and images'],
     [networkSize, 'people in your family network', 'linked by birth or marriage'],
-    [persons.length, 'people in the graph', 'all sources'],
+    [counts.persons, 'people in the graph', 'all sources'],
   ];
   document.getElementById('tiles').innerHTML = tiles.map(([v, k, s]) =>
     `<div class="tile"><div class="v">${fmt(v)}</div><div class="k">${esc(k)}<small>${esc(s)}</small></div></div>`).join('');
@@ -449,13 +444,13 @@
       const r = rel[d.id];
       tip.innerHTML = `<b>${esc(d.name)}</b>${dates ? ` <span class="m">${esc(dates)}</span>` : ''}` +
         (d.birthPlace ? `<br><span class="m">b. ${esc(d.birthPlace)}</span>` : '') +
-        (r ? `<br><b>${esc(r.label)}</b> of ${esc(seed ? seed.name : 'seed')}` : '') +
+        (r ? `<br><b>${esc(r)}</b> of ${esc(seed ? seed.name : 'seed')}` : '') +
         `<br><span class="mono">${esc(d.id)} · ${esc((d.sources || []).join(', '))}</span>` +
-        (touch && d.url ? `<br><a href="${esc(d.url)}" target="_blank" rel="noopener">Open the source record &rarr;</a>` : '');
+        (touch && urlOf(d) ? `<br><a href="${esc(urlOf(d))}" target="_blank" rel="noopener">Open the source record &rarr;</a>` : '');
       tip.style.display = 'block';
       place(e);
     };
-    const open = d => { if (d.url) window.open(d.url, '_blank', 'noopener'); };
+    const open = d => { if (urlOf(d)) window.open(urlOf(d), '_blank', 'noopener'); };
     // With a mouse the tooltip follows the pointer and a click opens the source; on touch the first tap
     // pins the tooltip (which then carries the link) and a second tap on the same node opens the source.
     let pinned = null;
@@ -512,7 +507,7 @@
 
   collapsible(document.getElementById('table-anc'),
     `<table class="stack"><thead><tr><th class="num">Gen.</th><th>Name</th><th>Relation</th><th>Born</th><th>Died</th><th>Known from</th><th>Records</th></tr></thead><tbody>` +
-    ancestors.map((a, i) => `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="num half gen" data-label="Gen.">${a.g}</td><td class="key">${esc(a.p.name)}</td><td class="sub">${esc(rel[a.p.id] ? rel[a.p.id].label : genLabel(a.g))}</td><td class="half" data-label="Born">${esc(year(a.p.birth))}${a.p.birthPlace ? `<br><span class="hint">${esc(place(a.p.birthPlace))}</span>` : ''}</td><td class="half" data-label="Died">${esc(year(a.p.death))}${a.p.deathPlace ? `<br><span class="hint">${esc(place(a.p.deathPlace))}</span>` : ''}</td><td class="half" data-label="Known from">${pill(a.p)}</td><td class="half" data-label="Records">${srcLinks(a.p)}</td></tr>`).join('') +
+    ancestors.map((a, i) => `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="num half gen" data-label="Gen.">${a.g}</td><td class="key">${esc(a.p.name)}</td><td class="sub">${esc(rel[a.p.id] || genLabel(a.g))}</td><td class="half" data-label="Born">${esc(year(a.p.birth))}${a.p.birthPlace ? `<br><span class="hint">${esc(place(a.p.birthPlace))}</span>` : ''}</td><td class="half" data-label="Died">${esc(year(a.p.death))}${a.p.deathPlace ? `<br><span class="hint">${esc(place(a.p.deathPlace))}</span>` : ''}</td><td class="half" data-label="Known from">${pill(a.p)}</td><td class="half" data-label="Records">${srcLinks(a.p)}</td></tr>`).join('') +
     '</tbody></table>', ancestors.length);
 
   const ancestorsOf = id => { const out = new Set(); const q = [id]; while (q.length) { const p = byId.get(q.pop()); if (!p) continue; [p.father, p.mother].forEach(a => { if (a && !out.has(a)) { out.add(a); q.push(a); } }); } return out; };
@@ -520,14 +515,14 @@
     .map(f => `<span class="pill${f.style ? ' ' + esc(f.style) : ''}">${esc(f.label)}</span>`).join(' ');
   document.getElementById('sa-flags-note').textContent = site.flagsNote || '';
   document.getElementById('sa-title').textContent = 'South African ' + familyLabel + ' records';
-  const saRows = persons.filter(p => isFamily(p) && p.id !== data.seed && !p.id.startsWith('seed:') && (isSA(p) || hasSrc(p, 'eggsa')))
+  const saRows = (data.regional || []).map(id => byId.get(id)).filter(Boolean)
     .sort((a, b) => (year(a.birth) || '9999').localeCompare(year(b.birth) || '9999') || (a.name || '').localeCompare(b.name || ''));
   if (saRows.length) collapsible(document.getElementById('table-sa'),
     `<table class="stack"><thead><tr><th>Name</th><th class="num">Born</th><th class="num">Died</th><th>Place</th><th>Relation</th>${siteFlags.length ? '<th>Flags</th>' : ''}<th>Records</th></tr></thead><tbody>` +
     saRows.map((p, i) => {
       const pl = p.birthPlace || (p.deathPlace ? 'buried ' + place(p.deathPlace) : '');
       const r = rel[p.id];
-      return `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="key">${esc(p.name)}</td><td class="num half" data-label="Born">${esc(year(p.birth))}</td><td class="num half" data-label="Died">${esc(year(p.death))}</td><td data-label="Place">${esc(pl)}</td><td class="sub">${r ? esc(r.label) : comps[p.id] === seedComp ? 'in your network' : ''}</td>${siteFlags.length ? `<td class="half" data-label="Flags">${flagsFor(p)}</td>` : ''}<td class="half" data-label="Records">${srcLinks(p)}</td></tr>`;
+      return `<tr${i >= LIMIT ? ' class="extra" hidden' : ''}><td class="key">${esc(p.name)}</td><td class="num half" data-label="Born">${esc(year(p.birth))}</td><td class="num half" data-label="Died">${esc(year(p.death))}</td><td data-label="Place">${esc(pl)}</td><td class="sub">${r ? esc(r) : comps[p.id] === seedComp ? 'in your network' : ''}</td>${siteFlags.length ? `<td class="half" data-label="Flags">${flagsFor(p)}</td>` : ''}<td class="half" data-label="Records">${srcLinks(p)}</td></tr>`;
     }).join('') + '</tbody></table>', saRows.length);
   else document.getElementById('table-sa').innerHTML = '<p class="sub">No South African records loaded.</p>';
 
@@ -560,9 +555,9 @@
   probs.forEach(a => steps.push(`<strong>${esc(a.p.name)}</strong> and the generations above rest on a match of name and date, not on a record naming the parent.`));
   document.getElementById('steps').innerHTML = steps.length ? steps.map(s => `<li>${s}</li>`).join('') : '<li>No gaps within four generations.</li>';
 
-  const counts = ['wikitree', 'eggsa', 'familysearch'].map(s => `${fmt(persons.filter(p => hasSrc(p, s)).length)} from ${({wikitree:'WikiTree', eggsa:'eGGSA graves', familysearch:'FamilySearch records'})[s]}`).join(', ');
+  const bySource = ['wikitree', 'eggsa', 'familysearch'].map(s => `${fmt(counts.sources[s] || 0)} from ${({wikitree:'WikiTree', eggsa:'eGGSA graves', familysearch:'FamilySearch records'})[s]}`).join(', ');
   document.getElementById('foot').textContent =
-    `Graph of ${fmt(persons.length)} people: ${counts}. Generated by the kin toolkit from public records; living people appear only where those sources already publish them or where the family supplied them.`;
+    `Graph of ${fmt(counts.persons)} people: ${bySource}. Generated by the kin toolkit from public records; living people appear only where those sources already publish them or where the family supplied them.`;
 })();
 </script>
 </body>

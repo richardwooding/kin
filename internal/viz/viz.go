@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/richardwooding/kin/internal/graph"
@@ -105,34 +106,206 @@ type Options struct {
 	MapURL      string // absolute URL of the published map page (optional)
 }
 
-// Payload is the JSON handed to the page.
+// Payload is the JSON handed to the page. It carries only the people the page
+// draws (the seed's ancestors, everyone within two steps of them, the regional
+// record rows and the ancestor chains those rows are flagged through), with
+// only the fields the page reads; Counts describes the whole graph.
 type Payload struct {
-	Seed       string                     `json:"seed"`
-	Generated  string                     `json:"generated"`
-	Persons    []*model.Person            `json:"persons"`
-	Components map[string]int             `json:"components"`
-	Relations  map[string]*graph.Relation `json:"relations"`
-	Notices    []json.RawMessage          `json:"notices"`
-	Records    []json.RawMessage          `json:"records"`
-	Probable   []string                   `json:"probable"`
-	Site       Site                       `json:"site"`
-	TreeURL    string                     `json:"treeUrl,omitempty"`
-	MapURL     string                     `json:"mapUrl,omitempty"`
+	Seed       string            `json:"seed"`
+	Generated  string            `json:"generated"`
+	Persons    []Person          `json:"persons"`
+	Components map[string]int    `json:"components"` // connected component of each shipped person
+	Relations  map[string]string `json:"relations"`  // relationship label of each shipped person to the seed
+	Family     []string          `json:"family"`     // surnames of the seed and the first three generations
+	Regional   []string          `json:"regional"`   // ids shown in the regional-records table
+	Counts     Counts            `json:"counts"`
+	Notices    []json.RawMessage `json:"notices"`
+	Records    []json.RawMessage `json:"records"`
+	Probable   []string          `json:"probable"`
+	Site       Site              `json:"site"`
+	TreeURL    string            `json:"treeUrl,omitempty"`
+	MapURL     string            `json:"mapUrl,omitempty"`
+}
+
+// Person is the part of a model.Person the page reads. URL is left out when it
+// is the WikiTree profile, which the page derives from WikiTree.
+type Person struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Given      string   `json:"given,omitempty"`
+	Surname    string   `json:"surname,omitempty"`
+	Birth      string   `json:"birth,omitempty"`
+	Death      string   `json:"death,omitempty"`
+	BirthPlace string   `json:"birthPlace,omitempty"`
+	DeathPlace string   `json:"deathPlace,omitempty"`
+	WikiTree   string   `json:"wikitree,omitempty"`
+	URL        string   `json:"url,omitempty"`
+	Father     string   `json:"father,omitempty"`
+	Mother     string   `json:"mother,omitempty"`
+	Spouses    []string `json:"spouses,omitempty"`
+	Sources    []string `json:"sources,omitempty"`
+}
+
+// Counts summarises the whole graph for the tiles and the footer.
+type Counts struct {
+	Persons int            `json:"persons"` // everyone in the graph
+	Network int            `json:"network"` // everyone in the seed's connected component
+	Sources map[string]int `json:"sources"` // people per source name
+}
+
+// Hops is how far from a direct ancestor the family network reaches.
+const Hops = 2
+
+// regionalPlace matches a birthplace or place of death in South Africa, past or present.
+var regionalPlace = regexp.MustCompile(`(?i)south africa|cape colony|cape province|cape town|transvaal|natal|orange free|gauteng|springs|johannesburg|pretoria|durban|boksburg|benoni|germiston|brakpan|witwatersrand|ceres|wynberg|maitland|paarl|durbanville|port elizabeth|kenwyn|roodepoort|maraisburg|krugersdorp|plettenberg|mossel bay|stellenbosch|drakenstein|caep|kaap`)
+
+func has(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+// shown picks the people the page draws and the regional rows among them.
+func shown(g *model.Graph, seed string) (keep map[string]bool, family, regional []string) {
+	keep = map[string]bool{}
+	anc := graph.Ancestors(g, seed) // includes seed at 0
+	for id := range anc {
+		if g.Persons[id] != nil {
+			keep[id] = true
+		}
+	}
+	// the network: everyone within Hops steps of an ancestor by birth or marriage
+	adj := map[string][]string{}
+	for id, p := range g.Persons {
+		for _, o := range append([]string{p.Father, p.Mother}, p.Spouses...) {
+			if o != "" && g.Persons[o] != nil {
+				adj[id] = append(adj[id], o)
+				adj[o] = append(adj[o], id)
+			}
+		}
+	}
+	dist := map[string]int{}
+	var queue []string
+	for id := range keep {
+		if id != seed {
+			dist[id] = 0
+			queue = append(queue, id)
+		}
+	}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if dist[cur] >= Hops {
+			continue
+		}
+		for _, nb := range adj[cur] {
+			if _, seen := dist[nb]; !seen {
+				dist[nb] = dist[cur] + 1
+				queue = append(queue, nb)
+				keep[nb] = true
+			}
+		}
+	}
+	// family surnames: the first three generations nearest first (father before
+	// mother within a generation, then by birth), then the seed's own
+	type gp struct {
+		p   *model.Person
+		gen int
+	}
+	var near []gp
+	seen := map[string]bool{seed: true}
+	for queue := []gp{{g.Persons[seed], 0}}; len(queue) > 0; queue = queue[1:] {
+		cur := queue[0]
+		if cur.p == nil || cur.gen >= 3 {
+			continue
+		}
+		for _, id := range []string{cur.p.Father, cur.p.Mother} {
+			if p := g.Persons[id]; p != nil && !seen[id] {
+				seen[id] = true
+				near = append(near, gp{p, cur.gen + 1})
+				queue = append(queue, gp{p, cur.gen + 1})
+			}
+		}
+	}
+	birth := func(p *model.Person) string {
+		if p.Birth == "" {
+			return "9999"
+		}
+		return p.Birth
+	}
+	sort.SliceStable(near, func(i, j int) bool {
+		if near[i].gen != near[j].gen {
+			return near[i].gen < near[j].gen
+		}
+		return birth(near[i].p) < birth(near[j].p)
+	})
+	names := map[string]bool{}
+	add := func(surname string) {
+		if n := strings.ToLower(surname); n != "" && !names[n] {
+			names[n] = true
+			family = append(family, strings.ToUpper(n[:1])+n[1:])
+		}
+	}
+	for _, x := range near {
+		add(x.p.Surname)
+	}
+	if p := g.Persons[seed]; p != nil {
+		add(p.Surname)
+	}
+	// regional rows: family surnames born, buried or recorded in the region, plus their ancestor chains for the flags
+	for _, p := range g.Sorted() {
+		if p.ID == seed || strings.HasPrefix(p.ID, "seed:") || !names[strings.ToLower(strings.TrimSuffix(strings.TrimSpace(p.Surname), "s"))] && !names[strings.ToLower(strings.TrimSpace(p.Surname))] {
+			continue
+		}
+		if !regionalPlace.MatchString(p.BirthPlace) && !regionalPlace.MatchString(p.DeathPlace) && !has(p.Sources, "eggsa") {
+			continue
+		}
+		regional = append(regional, p.ID)
+		keep[p.ID] = true
+		for id := range graph.Ancestors(g, p.ID) {
+			if g.Persons[id] != nil {
+				keep[id] = true
+			}
+		}
+	}
+	return keep, family, regional
 }
 
 // Render writes the page for g to path.
 func Render(g *model.Graph, opts Options, path string) error {
+	keep, family, regional := shown(g, opts.Seed)
 	comps := graph.Components(g)
-	rels := map[string]*graph.Relation{}
-	for id := range g.Persons {
-		if id == opts.Seed {
-			continue
+	counts := Counts{Persons: len(g.Persons), Sources: map[string]int{}}
+	for id, p := range g.Persons {
+		if comps[id] == comps[opts.Seed] {
+			counts.Network++
 		}
-		if r, ok := graph.Relationship(g, opts.Seed, id); ok {
-			rels[id] = r
+		for _, s := range p.Sources {
+			counts.Sources[s]++
 		}
 	}
-	pl := Payload{Seed: opts.Seed, Persons: g.Sorted(), Components: comps, Relations: rels, Site: opts.Site, TreeURL: opts.TreeURL, MapURL: opts.MapURL}
+	pl := Payload{Seed: opts.Seed, Components: map[string]int{}, Relations: map[string]string{}, Family: family, Regional: regional, Counts: counts,
+		Site: opts.Site, TreeURL: opts.TreeURL, MapURL: opts.MapURL}
+	for _, p := range g.Sorted() {
+		if !keep[p.ID] {
+			continue
+		}
+		v := Person{ID: p.ID, Name: p.Name, Given: p.Given, Surname: p.Surname, Birth: p.Birth, Death: p.Death, BirthPlace: p.BirthPlace, DeathPlace: p.DeathPlace,
+			WikiTree: p.WikiTree, URL: p.URL, Father: p.Father, Mother: p.Mother, Spouses: p.Spouses, Sources: p.Sources}
+		if p.WikiTree != "" && p.URL == "https://www.wikitree.com/wiki/"+p.WikiTree {
+			v.URL = ""
+		}
+		pl.Persons = append(pl.Persons, v)
+		pl.Components[p.ID] = comps[p.ID]
+		if p.ID != opts.Seed {
+			if r, ok := graph.Relationship(g, opts.Seed, p.ID); ok {
+				pl.Relations[p.ID] = r.Label
+			}
+		}
+	}
 	for _, id := range opts.ProbableIDs {
 		id = g.Resolve(id)
 		for anc := range graph.Ancestors(g, id) {
