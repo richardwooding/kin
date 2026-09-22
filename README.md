@@ -2,7 +2,8 @@
 
 A command-line ancestry toolkit. `kin` pulls family records from public sources
 (WikiTree, the eGGSA gravestone and newspaper indexes, the South African National
-Archives index NAAIRS, Wikidata), merges them with your own hand-entered people
+Archives index NAAIRS, the Swedish National Archives registers, a local copy of the
+Danish Link-Lives censuses, Wikidata), merges them with your own hand-entered people
 into one kinship graph, labels every relationship relative to you, and renders
 a single-file ancestry web page, a pan-and-zoom family tree and printable A4
 reports.
@@ -85,6 +86,9 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin gazette sweep -graph data/graph.json -root seed:me [-gen 20] [-max 2] [-delay 1.1s] [-resume] [-dry-run]` | The Gazette | Two or three searches per British or Irish ancestor, scored against their names, places and life window; every answer cached on disk |
 | `kin tna -q "Wooding Portsmouth" [-series "PROB 11"] [-held elsewhere] [-from 1780 -to 1860] [-list]` | UK National Archives Discovery catalogue | One catalogue search: wills, death duty registers, naturalisations, police and navy registers, or the holdings of the archives that keep records elsewhere |
 | `kin tna sweep -graph data/graph.json -root seed:me [-frontier] [-resume] [-dry-run]` | UK National Archives Discovery catalogue | The name-indexed civil series for every British and Irish ancestor and, on the frontier, the county record offices' own catalogues by surname and parish |
+| `kin riksarkivet -name "Nils Johansson" [-type birth\|marriage] [-from 1880 -to 1890] [-place Mjällby]` | Swedish National Archives (Riksarkivet) Search API | One search of the birth or marriage registers indexed by name, parish and date, mostly Skåne, Blekinge and Halland |
+| `kin riksarkivet sweep -graph data/graph.json -root seed:me [-gen 20] [-delay 1s] [-resume] [-dry-run]` | Riksarkivet Search API | For every Swedish ancestor, the baptism by their own name and their father's and the marriage, scored against names, dates, parents, spouses and parish; every answer cached on disk |
+| `kin linklives sweep -dir data/linklives -graph data/graph.json -root seed:me [-gen 20] [-dry-run]` | Link-Lives release 2, from your own download | Reads the Danish censuses of 1787 to 1901 and the Copenhagen burial register from disk for every Danish ancestor, scores each appearance by name, age, parish and the household around it, and links the life courses; fetches nothing |
 | `kin war -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer]` | UK National Archives Discovery catalogue; NAAIRS | Lists the men of military age among the ancestors and their sons and checks them against the name-indexed imperial military series (Boer War attestations and rolls, First World War medal cards and officers' files, navy and air force registers) and, for the Boer side, the South African archives for 1899 to 1903 |
 | `kin wikidata surname -name Smith`, `kin wikidata place -name Stellenbosch -country Q258` | Wikidata SPARQL and search | People with a family name or born in a place (optional; not needed for the pipeline) |
 | `kin graph build -seed seed.json -in a.json,b.json` | — | Merges graphs, deduplicating people that carry the same WikiTree or Wikidata id and recording the merge aliases |
@@ -94,7 +98,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin viz -graph data/graph.json -seed seed:me [-site site.json] [-notices …] [-records …] [-probable id] [-tree-url URL]` | — | Writes the ancestry page |
 | `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL]` | — | Writes the pan-and-zoom family tree page |
 | `kin map -graph data/graph.json -root seed:me [-reader id] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL]` | Nominatim (OpenStreetMap) for coordinates | Writes a pan-and-zoom map of the ancestors' birth and death places |
-| `kin leads -graph data/graph.json -root seed:me [-probable id] [-id fs:X] [-out dist/leads.html]` | — | Prints search links for every ancestor still missing a parent, and for the probable ids, on FamilySearch, Cornwall OPC, WikiTree, the National Archives and the South African archives; fetches nothing |
+| `kin leads -graph data/graph.json -root seed:me [-probable id] [-id fs:X] [-out dist/leads.html]` | — | Prints search links for every ancestor still missing a parent, and for the probable ids, on FamilySearch, Cornwall OPC, WikiTree, the National Archives, the South African archives and the Nordic archives; fetches nothing |
 | `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …] [-dashboard-url URL]` | — | Writes a printable A4 ancestry report that also reads as a web page |
 
 Every subcommand prints its flags with `-h`.
@@ -258,6 +262,18 @@ couple by both parents' forenames, when a place is in Cornwall) and the National
 Archives' Discovery catalogue, and give the `kin wikitree search`, `kin naairs` and
 `kin eggsa graves` commands to run.
 
+For an ancestor whose places are in Norway, Sweden, Denmark, Finland or Iceland
+(recognised by the country's own or English name, or by an old county, amt or län
+such as Sogn og Fjordane, Skåne or Frederiksborg), the page adds the FamilySearch
+baptism index of that country and the national archives: Digitalarkivet's person
+search over the Norwegian censuses and church books, pre-filled; the Swedish
+censuses of 1860 to 1930 at Riksarkivet, pre-filled, with the `kin riksarkivet`
+command for the birth registers; `kin linklives sweep` and the Link-Lives, Danish
+Demographic Database and Danish Family Search pages for Denmark; HisKi and SukuHaku
+for Finland; and Íslendingabók, which needs an Icelandic login. Names are compared
+with their accents folded and their patronymic endings matched (Andersen,
+Anderssen and Andersson; Christensdatter and Kristensdotter).
+
 `-upstream wt:` (repeatable) leaves off the frontier the parentless people whose id
 carries that prefix: the ends of WikiTree's own pedigrees are WikiTree's to extend,
 not the family's, and without the flag they swamp the page. A `-probable` id is
@@ -269,7 +285,12 @@ is kept and the same search is not offered as new.
 FreeREG, FreeCEN and FreeBMD forbid front-end programs that enter search parameters,
 so for them `kin leads` links only to the search page and prints the values to type.
 The Cornwall OPC allows personal research only, so its links are for the researcher
-to open by hand. Do not add clients for those sites.
+to open by hand. The same holds in the north: Digitalarkivet has no search API and
+asks crawlers to wait five seconds, histreg.no is fending off machine traffic behind
+a human check, Link-Lives' terms forbid scraping or harvesting its site, the Danish
+Demographic Database asks crawlers to wait thirty seconds, HisKi's robots file
+disallows its search, the Swedish census search sits behind a CAPTCHA, and
+Íslendingabók's terms forbid programs outright. Do not add clients for those sites.
 
 ## Sources: terms and manners
 
@@ -325,6 +346,37 @@ to open by hand. Do not add clients for those sites.
   that rests on a notice, cite the edition, issue, page and date, and credit
   "Contains public sector information licensed under the Open Government Licence
   v3.0".
+- **Riksarkivet** (Swedish National Archives): the Search API at
+  `data.riksarkivet.se` needs no key, its metadata is CC0 and its images Public
+  Domain Mark, and its terms allow programs while reserving the right to throttle
+  one that loads the service. `kin riksarkivet` sends one request a second, asks
+  at most three searches per ancestor plus the full entry of the best five hits,
+  caches every answer under `data/cache/riksarkivet`, and backs off for 15, 45, 90
+  and 180 seconds when the service answers 429 or 503 or drops the connection.
+  Birth entries give the child's given names only, the surname being the
+  father's patronymic, so a match rests on the parents and the parish; Andersson
+  and Nilsson are so common that a name and a year alone never make a lead. The
+  index is not the register: read the page image (the `image` manifest, or the
+  volume and page in `volume`) before believing an entry, and cite the parish
+  archive and volume.
+- **Link-Lives**: release 2 (DOI 10.5279/dk-ra-14001) is published by the Danish
+  National Archives, Copenhagen City Archives and the University of Copenhagen for
+  personal, educational and research use; it may not be used commercially, the
+  Copenhagen burial register may not be passed on or published whole, and
+  Link-Lives must be credited with the release number when you publish. Download
+  it yourself from [DigiData](https://digidata.rigsarkivet.dk/aflevering/14001),
+  unpack it under `data/linklives` (gitignored, like the rest of `data/`), and
+  `kin linklives sweep` reads the harmonised `*_std.csv` files and the release 2
+  life courses from there. Nothing is sent anywhere: the live site's terms forbid
+  harvesting, so the `link-lives.dk/soeg/pa/…` and `…/life-course/2.1-…` links in
+  the output are for you to open. Each file is read twice, once for the
+  appearances whose surname, first given name and age fit and once for their
+  households, so a sweep of the full release reads several gigabytes; run it once
+  and keep the result. The parish register
+  transcriptions are Ancestry's and are released only on application through
+  Rigsarkivet; when you have them, put their `*_std.csv` files in the same folder.
+  Cite "Link-Lives (2025) Link-Lives release 2, Danish National Archives,
+  Copenhagen City Archives and University of Copenhagen".
 - **FamilySearch** is not queried; its index entries and register images are read
   by hand and recorded in the records file with their ark and image references.
 
@@ -337,6 +389,8 @@ for the index are with the Master of the High Court for the district of death.
 Cape probate files 1822 to 1990 and Transvaal probate files 1869 to 1961 are also
 photographed on FamilySearch and can be read there free. English civil entries
 come from the General Register Office; Cornish parish registers from Kresen Kernow.
+Swedish church books are free to view at Riksarkivet (the entry's image link),
+Danish ones at Arkivalieronline, and Norwegian ones at Digitalarkivet.
 
 ## Licence
 
