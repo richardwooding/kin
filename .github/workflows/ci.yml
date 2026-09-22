@@ -40,6 +40,8 @@ jobs:
           go run ./cmd/kin tna -list | grep -q 'Prerogative Court of Canterbury'
           go run ./cmd/kin riksarkivet sweep -graph /tmp/kin/graph.json -root seed:me -dry-run 2>&1 | grep -q 'riksarkivet sweep: 0 people'
           go run ./cmd/kin linklives sweep -graph /tmp/kin/graph.json -root seed:me -dry-run 2>&1 | grep -q 'linklives sweep: 0 Danish ancestors'
+          go run ./cmd/kin news sweep -graph /tmp/kin/graph.json -root seed:me -dry-run 2>&1 | grep -q 'news sweep: 0 people'
+          grep -q 'britishnewspaperarchive.co.uk' /tmp/kin/leads.html
           go run ./cmd/kin tree -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -records examples/records.json -out /tmp/kin/tree.html
           go run ./cmd/kin map -graph /tmp/kin/graph.json -root seed:me -site examples/site.json -offline -cache "" -places examples/places.json -out /tmp/kin/map.html
           grep -q '"label":"Portsmouth' /tmp/kin/map.html
