@@ -3,7 +3,8 @@
 A command-line ancestry toolkit. `kin` pulls family records from public sources
 (WikiTree, the eGGSA gravestone and newspaper indexes, the South African National
 Archives index NAAIRS, the Swedish National Archives registers, a local copy of the
-Danish Link-Lives censuses, Wikidata), merges them with your own hand-entered people
+Danish Link-Lives censuses, the Norwegian and Danish historical newspapers,
+Wikidata), merges them with your own hand-entered people
 into one kinship graph, labels every relationship relative to you, and renders
 a single-file ancestry web page, a pan-and-zoom family tree and printable A4
 reports.
@@ -89,6 +90,8 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin riksarkivet -name "Nils Johansson" [-type birth\|marriage] [-from 1880 -to 1890] [-place Mjällby]` | Swedish National Archives (Riksarkivet) Search API | One search of the birth or marriage registers indexed by name, parish and date, mostly Skåne, Blekinge and Halland |
 | `kin riksarkivet sweep -graph data/graph.json -root seed:me [-gen 20] [-delay 1s] [-resume] [-dry-run]` | Riksarkivet Search API | For every Swedish ancestor, the baptism by their own name and their father's and the marriage, scored against names, dates, parents, spouses and parish; every answer cached on disk |
 | `kin linklives sweep -dir data/linklives -graph data/graph.json -root seed:me [-gen 20] [-dry-run]` | Link-Lives release 2, from your own download | Reads the Danish censuses of 1787 to 1901 and the Copenhagen burial register from disk for every Danish ancestor, scores each appearance by name, age, parish and the household around it, and links the life courses; fetches nothing |
+| `kin news -q "Ole Olsen" [-source nb\|kb\|europeana] [-from 1880 -to 1890] [-europeana-key K]` | Nasjonalbiblioteket; the Royal Danish Library's labs API; Europeana Newspapers | One phrase search of the historical newspapers of Norway, Denmark to 1880, or Europe |
+| `kin news sweep -graph data/graph.json -root seed:me [-source nb,kb] [-gen 20] [-delay 1s] [-resume] [-dry-run]` | the same | For every Norwegian and Danish ancestor, their name across their adult life and again at their death, scored against death notices, spouses, parents and places; every answer cached on disk |
 | `kin war -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer]` | UK National Archives Discovery catalogue; NAAIRS | Lists the men of military age among the ancestors and their sons and checks them against the name-indexed imperial military series (Boer War attestations and rolls, First World War medal cards and officers' files, navy and air force registers) and, for the Boer side, the South African archives for 1899 to 1903 |
 | `kin wikidata surname -name Smith`, `kin wikidata place -name Stellenbosch -country Q258` | Wikidata SPARQL and search | People with a family name or born in a place (optional; not needed for the pipeline) |
 | `kin graph build -seed seed.json -in a.json,b.json` | — | Merges graphs, deduplicating people that carry the same WikiTree or Wikidata id and recording the merge aliases |
@@ -307,6 +310,16 @@ Demographic Database asks crawlers to wait thirty seconds, HisKi's robots file
 disallows its search, the Swedish census search sits behind a CAPTCHA, and
 Íslendingabók's terms forbid programs outright. Do not add clients for those sites.
 
+Every ancestor in the United Kingdom, Ireland or the Nordic countries also gets a
+"Newspapers" group covering their adult life. The British Newspaper Archive
+(Findmypast) forbids "programmatic access whether by robot, spider, or otherwise",
+and Welsh Newspapers Online, Irish Newspaper Archives, Svenska dagstidningar,
+timarit.is and Digi (Finland) turn programs away with bot checks or robots rules.
+So the page links to their search, pre-filled where the site takes the name in its
+address (Svenska dagstidningar), and otherwise gives the phrase and years to type.
+The Norwegian papers and the Danish papers to 1880 come with a `kin news` command,
+and Mediestream holds the later Danish papers.
+
 ## Sources: terms and manners
 
 - **WikiTree**: the public API is free for non-commercial use under WikiTree's
@@ -392,6 +405,34 @@ disallows its search, the Swedish census search sits behind a CAPTCHA, and
   Rigsarkivet; when you have them, put their `*_std.csv` files in the same folder.
   Cite "Link-Lives (2025) Link-Lives release 2, Danish National Archives,
   Copenhagen City Archives and University of Copenhagen".
+- **Historical newspapers** (`kin news`): three archives let a program search the
+  text of their papers:
+  - Nasjonalbiblioteket's catalogue API (`api.nb.no`, no key) for Norway. Its
+    papers are open to everyone once they are ninety years old, so kin searches
+    only those and drops any hit marked readable only in Norway.
+  - The Royal Danish Library's experimental labs API
+    (`labs.statsbiblioteket.dk`, no key, plain HTTP) for Denmark. It serves the
+    papers more than 140 years old, so 1880 and earlier, under the Public Domain
+    Mark.
+  - Europeana Newspapers, the full text of Europe's national libraries (Austria,
+    Germany, the Baltic and others; very little British or Irish). It needs a
+    free API key from Europeana, given as `-europeana-key` or
+    `KIN_EUROPEANA_KEY`, and runs only when named with `-source europeana`.
+
+  `kin news` waits one second between requests, backs off for 15, 45, 90 and 180
+  seconds when an archive answers 429 or 503 or drops the connection, and caches
+  every answer under `data/cache/news/<source>`. A sweep asks each archive twice
+  per ancestor: once across their adult life, and once for the years of their
+  death, since the archives return the oldest pages first and a death notice is
+  the likeliest find.
+
+  The text is OCR of old print ("HanS Jensen"), so the name is matched allowing
+  one wrong letter and, in the Nordic papers, patronymic spellings. A hit counts
+  only when a death notice in the year of death, a spouse, a parent or child
+  named in full, or the person's parish or town backs it; Hans Jensen is in every
+  Danish paper. Nasjonalbiblioteket returns the matched name and no text around
+  it, so its hits rest on the date and the town the paper came from; open the
+  page before believing any of them.
 - **FamilySearch** is not queried; its index entries and register images are read
   by hand and recorded in the records file with their ark and image references.
 
