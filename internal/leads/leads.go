@@ -374,6 +374,9 @@ func groups(p *model.Person, places string, spouse *model.Person, kids []*model.
 		}})
 	}
 	out = append(out, nordic(r, first, surname, by, dy)...)
+	if g, ok := newspapers(r, first, surname, by, dy); ok {
+		out = append(out, g)
+	}
 	if r&place.Ireland != 0 {
 		out = append(out, Group{Service: "Ireland", Leads: []Lead{{Label: "civil and church records", URL: "https://www.irishgenealogy.ie/en/", Hint: fmt.Sprintf("surname %s, first name %s%s", surname, first, dateLabel(by))}}})
 	}
@@ -432,6 +435,77 @@ func nordic(r place.Region, first, surname string, by, dy int) []Group {
 		}})
 	}
 	return out
+}
+
+// newspapers gives the historical newspapers of the person's countries over
+// their adult life. The British Newspaper Archive forbids programs, and Welsh
+// Newspapers Online, Irish Newspaper Archives, Svenska dagstidningar,
+// timarit.is and Digi turn them away, so those are pages to open; Norway and
+// Denmark to 1880 are searched by kin news.
+func newspapers(r place.Region, first, surname string, by, dy int) (Group, bool) {
+	from, to := 0, 0
+	switch {
+	case by > 0 && dy > 0:
+		from, to = by+16, dy+2
+	case by > 0:
+		from, to = by+16, by+100
+	case dy > 0:
+		from, to = dy-60, dy+2
+	}
+	name := first + " " + surname
+	typed := fmt.Sprintf("the phrase %q", name)
+	years := ""
+	if from > 0 {
+		years = " " + span(from, to)
+		typed += ", years " + span(from, to)
+	}
+	var ls []Lead
+	if r.UK() {
+		ls = append(ls, Lead{Label: "British Newspaper Archive (type by hand)", URL: "https://www.britishnewspaperarchive.co.uk/search", Hint: typed})
+	}
+	if r&place.Wales != 0 {
+		ls = append(ls, Lead{Label: "Welsh Newspapers Online (type by hand)", URL: "https://newspapers.library.wales/", Hint: typed})
+	}
+	if r&place.Ireland != 0 {
+		ls = append(ls, Lead{Label: "Irish Newspaper Archives (type by hand)", URL: "https://www.irishnewsarchive.com/", Hint: typed})
+	}
+	hint := func(src string, from, to int) string {
+		h := "kin news -source " + src + " -q " + shellQuote(name)
+		if from > 0 {
+			h += fmt.Sprintf(" -from %d -to %d", from, to)
+		}
+		return h
+	}
+	if r&place.Norway != 0 {
+		q := url.Values{"q": {`"` + name + `"`}, "mediatype": {"aviser"}}
+		ls = append(ls, Lead{Label: "Norwegian newspapers" + years, URL: "https://www.nb.no/search?" + q.Encode(), Hint: hint("nb", from, to)})
+	}
+	if r&place.Denmark != 0 {
+		l := Lead{Label: "Danish newspapers in Mediestream" + years, URL: "https://www2.statsbiblioteket.dk/mediestream/avis/search/" + url.PathEscape(`"`+name+`"`)}
+		if from == 0 || from <= 1880 {
+			top := to
+			if top == 0 || top > 1880 {
+				top = 1880
+			}
+			l.Hint = hint("kb", from, top) + " (the labs API ends in 1880)"
+		}
+		ls = append(ls, l)
+	}
+	if r&place.Sweden != 0 {
+		q := url.Values{"q": {`"` + name + `"`}}
+		if from > 0 {
+			q.Set("from", fmt.Sprintf("%d-01-01", from))
+			q.Set("to", fmt.Sprintf("%d-12-31", to))
+		}
+		ls = append(ls, Lead{Label: "Svenska dagstidningar" + years, URL: "https://tidningar.kb.se/search?" + q.Encode()})
+	}
+	if r&place.Finland != 0 {
+		ls = append(ls, Lead{Label: "Digi, National Library of Finland (type by hand)", URL: "https://digi.kansalliskirjasto.fi/search", Hint: typed})
+	}
+	if r&place.Iceland != 0 {
+		ls = append(ls, Lead{Label: "timarit.is (type by hand)", URL: "https://timarit.is/", Hint: typed})
+	}
+	return Group{Service: "Newspapers", Leads: ls}, len(ls) > 0
 }
 
 // gazetteFrom and gazetteTo bound a search of the official notices by the

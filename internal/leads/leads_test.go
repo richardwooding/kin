@@ -334,3 +334,35 @@ func TestNordicLeads(t *testing.T) {
 		t.Errorf("born in Sweden, died in Denmark: both baptism indexes: %+v", fs)
 	}
 }
+
+func TestNewspaperLeads(t *testing.T) {
+	g := model.NewGraph()
+	g.Add(&model.Person{ID: "seed:me", Name: "Alex Smith", Living: true, Father: "seed:d", Mother: "seed:e"})
+	g.Add(&model.Person{ID: "seed:d", Name: "David Evans", Given: "David", Surname: "Evans", Birth: "1850", Death: "1910", BirthPlace: "Aberystwyth, Cardiganshire, Wales | Cork, Ireland"})
+	g.Add(&model.Person{ID: "seed:e", Name: "Hans Jensen", Given: "Hans", Surname: "Jensen", Birth: "1850", Death: "1910", BirthPlace: "Odense, Danmark | Bergen, Norge"})
+	entries := Build(g, Options{Root: "seed:me"})
+
+	d := group(find(entries, "seed:d"), "Newspapers")
+	if d == nil || len(d.Leads) != 3 {
+		t.Fatalf("BNA, Welsh Newspapers and Irish Newspaper Archives: %+v", d)
+	}
+	for _, l := range d.Leads {
+		if strings.Contains(l.URL, "?") || !strings.Contains(l.Hint, `"David Evans", years 1866 to 1912`) {
+			t.Errorf("the British and Irish archives are pages to type into: %+v", l)
+		}
+	}
+
+	e := group(find(entries, "seed:e"), "Newspapers")
+	if e == nil || len(e.Leads) != 2 {
+		t.Fatalf("Norway and Denmark: %+v", e)
+	}
+	if !strings.Contains(e.Leads[0].URL, "nb.no/search?") || e.Leads[0].Hint != "kin news -source nb -q 'Hans Jensen' -from 1866 -to 1912" {
+		t.Errorf("Norwegian lead: %+v", e.Leads[0])
+	}
+	if !strings.Contains(e.Leads[1].URL, "mediestream/avis/search/%22Hans%20Jensen%22") || !strings.HasPrefix(e.Leads[1].Hint, "kin news -source kb -q 'Hans Jensen' -from 1866 -to 1880") {
+		t.Errorf("Danish lead, the labs API only to 1880: %+v", e.Leads[1])
+	}
+	if group(find(Build(testGraph(), Options{Root: "seed:me"}), "fs:m"), "Newspapers") != nil {
+		t.Error("a South African gets no newspaper group; eGGSA papers are searched by surname")
+	}
+}
