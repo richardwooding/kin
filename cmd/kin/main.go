@@ -24,6 +24,7 @@ import (
 	"github.com/richardwooding/kin/internal/linklives"
 	"github.com/richardwooding/kin/internal/model"
 	"github.com/richardwooding/kin/internal/naairs"
+	"github.com/richardwooding/kin/internal/news"
 	"github.com/richardwooding/kin/internal/place"
 	"github.com/richardwooding/kin/internal/report"
 	"github.com/richardwooding/kin/internal/riksarkivet"
@@ -84,6 +85,8 @@ func usage() {
   riksarkivet        -name "Nils Johansson" [-type birth|marriage] [-from 1880 -to 1890] [-place Mjällby] [-out data/ra_nils.json]   (Swedish National Archives birth and marriage registers)
   riksarkivet sweep  -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-delay 1s] [-resume] [-dry-run] -out data/riksarkivet.json   (baptisms and marriages for every Swedish ancestor)
   linklives sweep    -dir data/linklives -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-dry-run] -out data/linklives.json   (Danish censuses 1787-1901 and Copenhagen burials, from your download of Link-Lives release 2; nothing is fetched)
+  news               -q "Ole Olsen" [-source nb|kb|europeana] [-from 1880 -to 1890] [-europeana-key K] [-out data/news_olsen.json]   (historical newspapers: Norway, Denmark to 1880, Europeana)
+  news sweep         -graph data/graph.json -root seed:me [-source nb,kb] [-probable wt:X] [-gen 20] [-delay 1s] [-resume] [-dry-run] -out data/news.json   (score newspaper hits for every Norwegian and Danish ancestor)
   war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] [-client] [-notes-title "…"] -out dist/report.html   (printable ancestry report; -client for the reader's copy)
   leads              -graph data/graph.json -root seed:me [-probable wt:X] [-upstream wt:] [-searched seed/searched.json] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
@@ -136,6 +139,8 @@ func main() {
 		cmdRiksarkivet(ctx, os.Args[2:])
 	case "linklives":
 		cmdLinkLives(os.Args[2:])
+	case "news":
+		cmdNews(ctx, os.Args[2:])
 	default:
 		usage()
 	}
@@ -1534,4 +1539,155 @@ func cmdLinkLives(args []string) {
 	die(os.MkdirAll(filepath.Dir(*out), 0o755))
 	die(os.WriteFile(*out, b, 0o644))
 	logf("linklives sweep: wrote %s", *out)
+}
+
+// ---------------------------------------------------------------- news
+
+func newsSources(list, cache, key string, delay time.Duration) []news.Source {
+	var out []news.Source
+	for _, name := range strings.Split(list, ",") {
+		if name = strings.TrimSpace(name); name == "" {
+			continue
+		}
+		src, err := news.New(name, cache, key, delay)
+		die(err)
+		out = append(out, src)
+	}
+	return out
+}
+
+func cmdNews(ctx context.Context, args []string) {
+	if len(args) > 0 && args[0] == "sweep" {
+		cmdNewsSweep(ctx, args[1:])
+		return
+	}
+	fs := flag.NewFlagSet("news", flag.ExitOnError)
+	source := fs.String("source", "nb", "nb (Norway), kb (Denmark to 1880) or europeana")
+	q := fs.String("q", "", "name to find, searched as a phrase (e.g. \"Ole Olsen\")")
+	from := fs.Int("from", 0, "earliest year")
+	to := fs.Int("to", 0, "latest year")
+	max := fs.Int("max", 50, "hits to read")
+	key := fs.String("europeana-key", os.Getenv("KIN_EUROPEANA_KEY"), "Europeana API key")
+	cache := fs.String("cache", "data/cache/news", "directory of cached answers; empty disables it")
+	out := fs.String("out", "", "write the hits as json")
+	fs.Parse(args)
+	need("q", *q)
+	src := newsSources(*source, *cache, *key, time.Second)[0]
+	query := news.Query{Phrase: strings.Trim(*q, `"`), From: *from, To: *to, Max: *max}
+	if query.From > 0 || query.To > 0 {
+		if query.To == 0 {
+			query.To = time.Now().Year()
+		}
+		f, t, ok := src.Window(query.From, query.To)
+		if !ok {
+			die(fmt.Errorf("%s holds nothing open between %d and %d", src.Name(), *from, *to))
+		}
+		query.From, query.To = f, t
+	}
+	hits, total, err := src.Search(ctx, query)
+	die(err)
+	logf("news: %d hits, %d read", total, len(hits))
+	for _, h := range hits {
+		fmt.Printf("%-10s %-30s %s\n", h.Date, trim(h.Paper, 30), trim(h.Text, 90))
+	}
+	if *out != "" {
+		b, _ := json.MarshalIndent(hits, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+		logf("news: wrote %s", *out)
+	}
+}
+
+// cmdNewsSweep searches the newspapers of each ancestor's country for their
+// name across their adult life.
+func cmdNewsSweep(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("news sweep", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are swept (required)")
+	var probable multi
+	fs.Var(&probable, "probable", "person whose link to their parents is unproven (repeatable)")
+	gen := fs.Int("gen", 20, "generations above -root")
+	source := fs.String("source", "nb,kb", "comma-separated sources: nb (Norway), kb (Denmark to 1880), europeana (all, needs a key)")
+	min := fs.Int("min", news.Keep, "keep candidates scoring at least this")
+	max := fs.Int("max", 50, "hits read per query")
+	delay := fs.Duration("delay", time.Second, "pause between requests")
+	key := fs.String("europeana-key", os.Getenv("KIN_EUROPEANA_KEY"), "Europeana API key")
+	cache := fs.String("cache", "data/cache/news", "directory of cached answers; empty disables it")
+	resume := fs.Bool("resume", false, "skip persons already in -out")
+	dry := fs.Bool("dry-run", false, "print the queries and stop, fetching nothing")
+	out := fs.String("out", "data/news.json", "results json")
+	fs.Parse(args)
+	need("root", *root)
+	g, err := model.Load(*gp)
+	die(err)
+	srcs := newsSources(*source, *cache, *key, *delay)
+	opts := news.SweepOptions{Root: *root, ProbableIDs: probable, MaxGen: *gen, Min: *min, Max: *max}
+	ids := news.People(g, srcs, opts)
+
+	if *dry {
+		kids := place.Kids(g)
+		n := 0
+		for _, id := range ids {
+			p := g.Persons[g.Resolve(id)]
+			fmt.Printf("%s (%s-%s)\n", p.Name, model.Year(p.Birth), model.Year(p.Death))
+			for _, s := range srcs {
+				for _, q := range news.Plan(p, place.PlacesOf(g, p, kids[g.Resolve(id)]), s, *max) {
+					fmt.Printf("  %s\n", s.URL(q))
+					n++
+				}
+			}
+		}
+		logf("news sweep: %d people, %d queries", len(ids), n)
+		return
+	}
+
+	results := map[string]news.SweepResult{}
+	if *resume {
+		if b, err := os.ReadFile(*out); err == nil {
+			var prev []news.SweepResult
+			if json.Unmarshal(b, &prev) == nil {
+				for _, r := range prev {
+					if r.Err == "" {
+						results[r.ID] = r
+					}
+				}
+			}
+		}
+	}
+	var todo []string
+	for _, id := range ids {
+		if _, done := results[id]; !done {
+			todo = append(todo, id)
+		}
+	}
+	logf("news sweep: %d ancestors, %d to query", len(ids), len(todo))
+	save := func() {
+		list := make([]news.SweepResult, 0, len(results))
+		for _, id := range ids {
+			if r, ok := results[id]; ok {
+				list = append(list, r)
+			}
+		}
+		b, _ := json.MarshalIndent(list, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+	}
+	done := 0
+	news.Sweep(ctx, g, todo, srcs, opts, func(r news.SweepResult) {
+		done++
+		results[r.ID] = r
+		save()
+		if r.Err != "" {
+			logf("[%d/%d] %s: error %s", done, len(todo), r.Name, r.Err)
+			return
+		}
+		logf("[%d/%d] %s (%s-%s): %d hits, %d candidates", done, len(todo), r.Name, model.Year(r.Birth), model.Year(r.Death), r.Total, len(r.Hits))
+		for i, h := range r.Hits {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("  %d  %-10s %-9s %-28s %s  %s\n", h.Score, h.Date, h.Source, trim(h.Paper, 28), strings.Join(h.Why, ", "), h.URL)
+		}
+	})
+	logf("news sweep: wrote %s", *out)
 }
