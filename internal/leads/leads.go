@@ -312,6 +312,20 @@ func groups(p *model.Person, places string, spouse *model.Person, kids []*model.
 			}
 		}
 	}
+	for _, c := range []struct {
+		r     place.Region
+		id    string
+		label string
+	}{
+		{place.Norway, "1467014", "Norway baptisms 1634-1927"},
+		{place.Sweden, "1520594", "Sweden baptisms 1611-1920"},
+		{place.Denmark, "1778463", "Denmark baptisms 1618-1923"},
+		{place.Finland, "1778464", "Finland baptisms 1657-1890"},
+	} {
+		if r&c.r != 0 {
+			fs = append(fs, Lead{Label: c.label + dateLabel(by), URL: familySearch(given, surname, by, "", c.id)})
+		}
+	}
 	out = append(out, Group{Service: "FamilySearch", Leads: fs})
 
 	wt := "kin wikitree search -last " + shellQuote(surname) + " -first " + shellQuote(first)
@@ -359,8 +373,63 @@ func groups(p *model.Person, places string, spouse *model.Person, kids []*model.
 			{Label: "eGGSA gravestones", Hint: "kin eggsa graves -surname " + shellQuote(surname)},
 		}})
 	}
+	out = append(out, nordic(r, first, surname, by, dy)...)
 	if r&place.Ireland != 0 {
 		out = append(out, Group{Service: "Ireland", Leads: []Lead{{Label: "civil and church records", URL: "https://www.irishgenealogy.ie/en/", Hint: fmt.Sprintf("surname %s, first name %s%s", surname, first, dateLabel(by))}}})
+	}
+	return out
+}
+
+// nordic gives the Nordic archives. Only Riksarkivet's open API and a local
+// copy of Link-Lives may be searched by kin; Digitalarkivet, the Swedish
+// census search, histreg, DDD, HisKi and Íslendingabók are links for the user
+// to open, pre-filled only where the site takes its search in the address.
+func nordic(r place.Region, first, surname string, by, dy int) []Group {
+	typed := fmt.Sprintf("surname %s, first name %s%s", surname, first, dateLabel(by))
+	var out []Group
+	if r&place.Norway != 0 {
+		q := url.Values{"firstname": {first}, "lastname": {surname}}
+		if by > 0 {
+			q.Set("birth_year_from", strconv.Itoa(by-2))
+			q.Set("birth_year_to", strconv.Itoa(by+2))
+		}
+		out = append(out, Group{Service: "Norway", Leads: []Lead{
+			{Label: "Digitalarkivet censuses and church books", URL: "https://www.digitalarkivet.no/en/search/persons/advanced?" + q.Encode()},
+			{Label: "Historisk befolkningsregister (type by hand)", URL: "https://histreg.no/", Hint: typed},
+		}})
+	}
+	if r&place.Sweden != 0 {
+		q := url.Values{"Fornamn": {first}, "Efternamn": {surname}}
+		if by > 0 {
+			q.Set("Fodelsear", strconv.Itoa(by))
+		}
+		ra := "kin riksarkivet -name " + shellQuote(first+" "+surname)
+		if by > 0 {
+			ra += fmt.Sprintf(" -from %d -to %d", by-2, by+2)
+		}
+		out = append(out, Group{Service: "Sweden", Leads: []Lead{
+			{Label: "Riksarkivet censuses 1860-1930", URL: "https://sok.riksarkivet.se/folkrakningar?" + q.Encode()},
+			{Label: "Riksarkivet birth registers", Hint: ra},
+		}})
+	}
+	if r&place.Denmark != 0 {
+		out = append(out, Group{Service: "Denmark", Leads: []Lead{
+			{Label: "Link-Lives censuses and burials", Hint: "kin linklives sweep, once release 2 is downloaded from https://digidata.rigsarkivet.dk/aflevering/14001"},
+			{Label: "Link-Lives life courses (type by hand)", URL: "https://link-lives.dk/", Hint: typed},
+			{Label: "Danish Demographic Database (type by hand)", URL: "https://ddd.dda.dk/ddd_en.htm", Hint: typed},
+			{Label: "Danish Family Search (type by hand)", URL: "https://www.danishfamilysearch.com/", Hint: typed},
+		}})
+	}
+	if r&place.Finland != 0 {
+		out = append(out, Group{Service: "Finland", Leads: []Lead{
+			{Label: "HisKi parish registers (type by hand)", URL: "https://hiski.genealogia.fi/hiski?en", Hint: typed + "; choose the parish first"},
+			{Label: "SukuHaku, for members of the Genealogical Society of Finland", URL: "https://www.genealogia.fi/en/webservices/sukuhaku/", Hint: typed},
+		}})
+	}
+	if r&place.Iceland != 0 {
+		out = append(out, Group{Service: "Iceland", Leads: []Lead{
+			{Label: "Íslendingabók (needs an Icelandic kennitala login)", URL: "https://www.islendingabok.is/", Hint: typed},
+		}})
 	}
 	return out
 }

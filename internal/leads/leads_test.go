@@ -298,3 +298,39 @@ func TestUpstreamAndSearched(t *testing.T) {
 		t.Error("a missing file is an error")
 	}
 }
+
+func TestNordicLeads(t *testing.T) {
+	g := model.NewGraph()
+	g.Add(&model.Person{ID: "seed:me", Name: "Alex Smith", Living: true, Father: "seed:o", Mother: "seed:k"})
+	g.Add(&model.Person{ID: "seed:o", Name: "Ole Hansen", Given: "Ole", Surname: "Hansen", Birth: "1850", BirthPlace: "Balestrand, Sogn og Fjordane, Norge"})
+	g.Add(&model.Person{ID: "seed:k", Name: "Karin Nilsdotter", Given: "Karin", Surname: "Nilsdotter", Birth: "1855", BirthPlace: "Ystad, Skåne, Sverige | Odense, Danmark"})
+	entries := Build(g, Options{Root: "seed:me"})
+
+	o := find(entries, "seed:o")
+	no := group(o, "Norway")
+	if no == nil || !strings.Contains(no.Leads[0].URL, "digitalarkivet.no/en/search/persons/advanced?") ||
+		!strings.Contains(no.Leads[0].URL, "birth_year_from=1848") || !strings.Contains(no.Leads[0].URL, "lastname=Hansen") {
+		t.Errorf("Digitalarkivet lead wrong: %+v", no)
+	}
+	if no != nil && strings.Contains(no.Leads[1].URL, "?") {
+		t.Error("histreg is a page to type into, not a pre-filled search")
+	}
+	if !hasCollection(group(o, "FamilySearch"), "1467014") || hasCollection(group(o, "FamilySearch"), "1520594") {
+		t.Error("the Norwegian gets Norway's baptisms and not Sweden's")
+	}
+	if group(o, "Sweden") != nil || group(o, "The Gazette") != nil {
+		t.Error("no Swedish or British leads for a Norwegian")
+	}
+
+	k := find(entries, "seed:k")
+	se := group(k, "Sweden")
+	if se == nil || !strings.Contains(se.Leads[0].URL, "Fodelsear=1855") || se.Leads[1].Hint != "kin riksarkivet -name 'Karin Nilsdotter' -from 1853 -to 1857" {
+		t.Errorf("Swedish leads wrong: %+v", se)
+	}
+	if dk := group(k, "Denmark"); dk == nil || !strings.HasPrefix(dk.Leads[0].Hint, "kin linklives sweep") {
+		t.Errorf("Danish leads wrong: %+v", dk)
+	}
+	if fs := group(k, "FamilySearch"); !hasCollection(fs, "1520594") || !hasCollection(fs, "1778463") {
+		t.Errorf("born in Sweden, died in Denmark: both baptism indexes: %+v", fs)
+	}
+}
