@@ -3,6 +3,8 @@ package namematch
 import (
 	"strings"
 	"testing"
+
+	"github.com/richardwooding/kin/internal/model"
 )
 
 func TestExactRejectsStems(t *testing.T) {
@@ -77,5 +79,52 @@ func TestPlaceTokens(t *testing.T) {
 	}
 	if len(PlaceTokens("Cornwall, England")) != 0 {
 		t.Error("a county and a country alone distinguish nothing")
+	}
+}
+
+func TestTokensFoldNordicLetters(t *testing.T) {
+	words := Tokens("Bjørn Ågård, Tromsø, Sjælland")
+	if strings.Join(words, " ") != "BJORN AGARD TROMSO SJAELLAND" {
+		t.Errorf("accents should fold, not split words: %q", words)
+	}
+	if !Exact(words, "Bjørn") || !Exact(words, "Bjorn") {
+		t.Error("a term matches whichever way it is spelt")
+	}
+}
+
+func TestPatronym(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"Andersen", "Andersson", true},
+		{"Hanssen", "Hansen", true},
+		{"Christensdatter", "Kristensdotter", true},
+		{"Aagaard", "Ågård", true},
+		{"Olsen", "Olsson", true},
+		{"Jensdóttir", "Jensdatter", true},
+		{"Hansen", "Jensen", false},
+		{"Nielsen", "Nilsson", false},
+		{"", "", false},
+	}
+	for _, c := range cases {
+		if got := Patronym(c.a, c.b); got != c.want {
+			t.Errorf("Patronym(%q, %q) = %v (%q, %q)", c.a, c.b, got, Nordic(c.a), Nordic(c.b))
+		}
+	}
+}
+
+func TestNamesFallsBackToTheFullName(t *testing.T) {
+	p := &model.Person{Name: "Mary Spargo (Knuckey)"}
+	surname, givens := Names(p)
+	if surname != "Spargo" || strings.Join(givens, " ") != "Mary" {
+		t.Errorf("names = %q, %v", surname, givens)
+	}
+}
+
+func TestNamesDropsInitialsNotNordicNames(t *testing.T) {
+	_, givens := Names(&model.Person{Given: "J Øle", Surname: "Hansen"})
+	if strings.Join(givens, " ") != "Øle" {
+		t.Errorf("givens = %v", givens)
 	}
 }

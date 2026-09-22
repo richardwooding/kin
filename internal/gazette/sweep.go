@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/richardwooding/kin/internal/graph"
 	"github.com/richardwooding/kin/internal/model"
+	"github.com/richardwooding/kin/internal/namematch"
 	"github.com/richardwooding/kin/internal/place"
 )
 
@@ -53,54 +53,14 @@ const (
 // People lists the ancestors worth asking about: the British and Irish ones
 // who are dead or born long enough ago that their notices are published.
 func People(g *model.Graph, opts Options) []string {
-	maxGen := opts.MaxGen
-	if maxGen <= 0 {
-		maxGen = 20
-	}
-	root := g.Resolve(opts.Root)
-	anc := graph.Ancestors(g, root)
-	kids := place.Kids(g)
-	gen := map[string]int{}
-	for id, d := range anc {
-		if id != root && d <= maxGen {
-			gen[id] = d
-		}
-	}
-	for _, id := range opts.ProbableIDs {
-		id = g.Resolve(id)
-		if d, ok := anc[id]; ok && id != root {
-			gen[id] = d
-		}
-	}
-	var out []string
-	for id := range gen {
-		p := g.Persons[id]
-		if p == nil || p.Living {
-			continue
-		}
-		if !place.Of(place.PlacesOf(g, p, kids[id])).UK() {
-			continue
-		}
-		by, dy := year(p.Birth), year(p.Death)
-		if dy == 0 && by >= 1920 {
-			continue // possibly still living, and modern notices name the living
-		}
-		out = append(out, id)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if gen[out[i]] != gen[out[j]] {
-			return gen[out[i]] < gen[out[j]]
-		}
-		return out[i] < out[j]
-	})
-	return out
+	return place.Ancestors(g, opts.Root, opts.ProbableIDs, opts.MaxGen, place.Region.UK)
 }
 
 // Plan lists the queries for one person: their name as a phrase, the same
 // name in the notices' own order, and for a modern death the structured
 // deceased estates notices by date of death.
 func Plan(p *model.Person, places string, opts Options) []Query {
-	surname, givens := names(p)
+	surname, givens := namematch.Names(p)
 	if surname == "" || len(givens) == 0 {
 		return nil
 	}

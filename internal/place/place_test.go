@@ -88,3 +88,35 @@ func TestParish(t *testing.T) {
 		t.Errorf("Parish = %q", got)
 	}
 }
+
+func TestOfNordic(t *testing.T) {
+	cases := []struct {
+		places string
+		want   Region
+	}{
+		{"Balestrand, Sogn og Fjordane, Norge", Norway},
+		{"Tromsø, Troms", Norway},
+		{"Norra Strö, Kristianstads län, Sverige", Sweden},
+		{"Ystad, Skåne", Sweden},
+		{"Norra Strö, Kristianstads län", Sweden},
+		{"Kirke Hyllinge, Frederiksborg amt, Danmark", Denmark},
+		{"Ribe", Denmark},
+		{"Åbo, Finland", Finland},
+		{"Vaasa", Finland},
+		{"Reykjavík, Ísland", Iceland},
+		{"Bergen, Norway | Cape Town, Cape Colony", Norway | SouthAfrica},
+		{"Holland", 0},
+		{"Denmark Hill, Camberwell, London, England", England},
+		{"Long Island, New York", 0},
+		{"Isle of Wight", 0},
+		{"Robertsbridge", 0},
+	}
+	for _, c := range cases {
+		if got := Of(c.places); got != c.want {
+			t.Errorf("Of(%q) = %b, want %b", c.places, got, c.want)
+		}
+	}
+	if !Of("Odense, Fyn").Nordic() || Of("Stithians, Cornwall").Nordic() {
+		t.Error("Nordic covers Denmark and not Cornwall")
+	}
+}

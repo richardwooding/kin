@@ -37,7 +37,7 @@ var yearRange = regexp.MustCompile(`\b(1[5-9]\d\d|20\d\d)\b`)
 // and a search for Nuns returns Nun. The surname must therefore match exactly,
 // with no loose folding, before anything else is counted.
 func ScorePerson(p *model.Person, r Record, o ScoreOpts) (int, []string) {
-	surname, givens := names(p)
+	surname, givens := namematch.Names(p)
 	if surname == "" {
 		return 0, nil
 	}
@@ -185,33 +185,6 @@ func initials(words []string, surname string, givens []string) bool {
 		}
 	}
 	return true
-}
-
-// names splits a person into a surname and their given names.
-func names(p *model.Person) (string, []string) {
-	surname := strings.TrimSpace(p.Surname)
-	given := strings.TrimSpace(p.Given)
-	if surname == "" || given == "" {
-		name := p.Name
-		if i := strings.IndexByte(name, '('); i > 0 {
-			name = strings.TrimSpace(name[:i])
-		}
-		if fields := strings.Fields(name); len(fields) > 1 {
-			if surname == "" {
-				surname = fields[len(fields)-1]
-			}
-			if given == "" {
-				given = strings.Join(fields[:len(fields)-1], " ")
-			}
-		}
-	}
-	var givens []string
-	for _, g := range strings.Fields(given) {
-		if len(g) > 1 {
-			givens = append(givens, g)
-		}
-	}
-	return surname, givens
 }
 
 func capitalise(s string) string {

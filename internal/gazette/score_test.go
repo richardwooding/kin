@@ -106,14 +106,6 @@ func TestScoreCommonSurnameDamper(t *testing.T) {
 	}
 }
 
-func TestNamesFallsBackToTheFullName(t *testing.T) {
-	p := &model.Person{Name: "Mary Spargo (Knuckey)"}
-	surname, givens := names(p)
-	if surname != "Spargo" || strings.Join(givens, " ") != "Mary" {
-		t.Errorf("names = %q, %v", surname, givens)
-	}
-}
-
 func has(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {
