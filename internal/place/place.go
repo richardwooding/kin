@@ -29,6 +29,7 @@ const (
 	Denmark
 	Finland
 	Iceland
+	Wales // implies England, whose catalogues and gazette cover it
 )
 
 // nordic lists, with accents folded, the country, county and city names that
@@ -77,13 +78,18 @@ var nordic = []struct {
 // Of reads a place text; a person born in England who died at the Cape
 // belongs to both, and Cornwall implies England.
 func Of(places string) Region {
-	s := strings.ToLower(places)
+	s := strings.ReplaceAll(strings.ToLower(places), "new south wales", "nsw")
 	var r Region
 	if strings.Contains(s, "cornwall") {
 		r |= Cornwall | England
 	}
 	if containsAny(s, "england", "wales", "surrey", "middlesex", "london", "kent", "lancashire", "devon") {
 		r |= England
+	}
+	if containsAny(s, "wales", "glamorgan", "carmarthen", "pembroke", "cardigan", "merioneth", "caernarfon",
+		"carnarvon", "denbigh", "flintshire", "montgomeryshire", "brecknock", "breconshire", "radnorshire",
+		"anglesey", "monmouthshire") {
+		r |= Wales | England
 	}
 	if containsAny(s, "south africa", "cape", "transvaal", "natal", "free state", "orange river", "griqualand") {
 		r |= SouthAfrica
@@ -198,6 +204,45 @@ func Ancestors(g *model.Graph, root string, probable []string, maxGen int, in fu
 		}
 		return out[i] < out[j]
 	})
+	return out
+}
+
+// broad are the Nordic country, county and province words, accents folded,
+// that name a region rather than a parish or town. Counties that share a
+// name with their town (Kalmar, Viborg, Aarhus) are not listed: the town is
+// worth matching.
+var broad = map[string]bool{
+	"NORWAY": true, "NORGE": true, "NOREG": true, "NORWEGEN": true, "AKERSHUS": true, "HEDMARK": true,
+	"HEDEMARKEN": true, "OPPLAND": true, "BUSKERUD": true, "VESTFOLD": true, "JARLSBERG": true,
+	"TELEMARK": true, "BRATSBERG": true, "AGDER": true, "NEDENES": true, "ROGALAND": true,
+	"HORDALAND": true, "BERGENHUS": true, "SOGN": true, "FJORDANE": true, "ROMSDAL": true,
+	"TRONDELAG": true, "NORDLAND": true, "TROMS": true, "FINNMARK": true, "FINMARKEN": true,
+	"SMAALENENE": true, "OSTFOLD": true,
+	"SWEDEN": true, "SVERIGE": true, "SCHWEDEN": true, "UPPLAND": true, "SODERMANLAND": true,
+	"OSTERGOTLAND": true, "KRONOBERG": true, "GOTLAND": true, "BLEKINGE": true, "MALMOHUS": true,
+	"SKANE": true, "SCANIA": true, "HALLAND": true, "BOHUS": true, "BOHUSLAN": true, "ALVSBORG": true,
+	"SKARABORG": true, "VASTERGOTLAND": true, "VARMLAND": true, "NARKE": true, "VASTMANLAND": true,
+	"KOPPARBERG": true, "DALARNA": true, "DALECARLIA": true, "GAVLEBORG": true, "HALSINGLAND": true,
+	"VASTERNORRLAND": true, "JAMTLAND": true, "VASTERBOTTEN": true, "NORRBOTTEN": true, "SMALAND": true,
+	"MEDELPAD": true, "ANGERMANLAND": true, "HARJEDALEN": true,
+	"DENMARK": true, "DANMARK": true, "DANEMARK": true, "FREDERIKSBORG": true, "BORNHOLM": true,
+	"LOLLAND": true, "FALSTER": true, "FYEN": true, "FUNEN": true, "SJAELLAND": true, "ZEALAND": true,
+	"JYLLAND": true, "JUTLAND": true, "SONDERJYLLAND": true,
+	"FINLAND": true, "SUOMI": true, "FINNLAND": true, "UUSIMAA": true, "NYLAND": true, "HAME": true,
+	"SATAKUNTA": true, "POHJANMAA": true, "OSTROBOTHNIA": true, "KARJALA": true, "KARELIA": true,
+	"AHVENANMAA": true, "ALAND": true, "ICELAND": true, "ISLANDIA": true,
+}
+
+// Distinct returns the words of a place text that pick out a parish or
+// town, without the counties and countries that match a whole region:
+// namematch.PlaceTokens, less the Nordic counties.
+func Distinct(places string) []string {
+	var out []string
+	for _, w := range namematch.PlaceTokens(places) {
+		if !broad[w] && !broad[strings.TrimSuffix(w, "S")] {
+			out = append(out, w)
+		}
+	}
 	return out
 }
 

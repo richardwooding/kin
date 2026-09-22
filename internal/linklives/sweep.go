@@ -272,7 +272,7 @@ func score(t *target, r Row, household []Row) (int, []string) {
 	}
 
 	backed := false
-	mine := namematch.PlaceTokens(t.places)
+	mine := place.Distinct(t.places)
 	for _, pl := range []struct{ what, text string }{{"born in", r.BirthPlace}, {"living in", r.EventPlace}} {
 		if w := shared(mine, pl.text); w != "" {
 			sc += 2

@@ -1,6 +1,7 @@
 package place
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/richardwooding/kin/internal/model"
@@ -16,6 +17,9 @@ func TestOf(t *testing.T) {
 		{"Cape Town, Cape Colony", SouthAfrica},
 		{"Cork, County Cork, Ireland", Ireland},
 		{"Edinburgh, Scotland", Scotland},
+		{"Aberystwyth, Cardiganshire, Wales", Wales | England},
+		{"Llanelli, Carmarthenshire", Wales | England},
+		{"Sydney, New South Wales", 0},
 		{"Portsmouth, Hampshire, England | Port Elizabeth, Eastern Cape, South Africa", England | SouthAfrica},
 		{"", 0},
 	}
@@ -118,5 +122,12 @@ func TestOfNordic(t *testing.T) {
 	}
 	if !Of("Odense, Fyn").Nordic() || Of("Stithians, Cornwall").Nordic() {
 		t.Error("Nordic covers Denmark and not Cornwall")
+	}
+}
+
+func TestDistinctDropsCounties(t *testing.T) {
+	got := strings.Join(Distinct("Kirke Hyllinge, Frederiksborg amt, Danmark | Norra Strö, Kristianstads län, Skåne | Viborg"), ",")
+	if got != "HYLLINGE,STRO,KRISTIANSTADS,VIBORG" {
+		t.Errorf("Distinct = %s; the parishes and towns stay, the counties go", got)
 	}
 }
