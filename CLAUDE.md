@@ -36,6 +36,7 @@ go run ./cmd/kin gazette sweep -graph /tmp/kin/graph.json -root seed:me -dry-run
 go run ./cmd/kin tna sweep -graph /tmp/kin/graph.json -root seed:me -frontier -dry-run
 go run ./cmd/kin riksarkivet sweep -graph /tmp/kin/graph.json -root seed:me -dry-run
 go run ./cmd/kin linklives sweep -graph /tmp/kin/graph.json -root seed:me -dry-run   # lists files under -dir, reads no rows
+go run ./cmd/kin news sweep -graph /tmp/kin/graph.json -root seed:me -dry-run
 ```
 
 Releases are cut by pushing a `v*` tag; GoReleaser (`.goreleaser.yaml`) builds archives, a ghcr.io image via ko
@@ -46,7 +47,7 @@ are gitignored working directories for real family data and output.
 
 **Pipeline shape.** Every command reads and writes JSON files on disk; nothing is held between commands.
 Source commands (`wikitree`, `eggsa`, `naairs`, `wikidata`, `war`, `gazette`, `tna`, `riksarkivet`,
-`linklives`) each write a graph or result file.
+`linklives`, `news`) each write a graph or result file.
 `graph build` merges seed plus source graphs into `data/graph.json`; `graph redact` optionally rewrites it with
 living people reduced to names and links. Renderers (`viz`, `tree`, `map`, `report`) read a graph plus optional
 side files (records, notices, site, places) and write one HTML file. `leads` reads the graph and writes only
@@ -80,10 +81,12 @@ ancestor reached twice keeps every number but is drawn once under the lowest.
 on a name-and-date match. Each renderer expands this the same way through `graph.Ancestors` and shows a
 distinct style; keep the three in step.
 
-**Source clients** (`wikitree`, `eggsa`, `naairs`, `tna`, `gazette`, `riksarkivet`, `wikidata`, `geo`) are deliberately polite to
+**Source clients** (`wikitree`, `eggsa`, `naairs`, `tna`, `gazette`, `riksarkivet`, `news`, `wikidata`, `geo`) are deliberately polite to
 volunteer-run and rate-limited services: fixed delays between calls, back-off on 429, a small worker count,
 and on-disk caches under `data/cache/`. All outbound requests send `httpx.UserAgent()` (and `httpx.AppID` to
-WikiTree). Do not remove delays or caching, and do not add parallelism against these hosts. Each client
+WikiTree). New clients should use `httpx.Polite`, which holds the delay, the 429/503 back-off, the user agent
+and the cache in one place (`riksarkivet` and `news` do). Do not remove delays or caching, and do not add
+parallelism against these hosts. Each client
 converts its own records into `model.Person` (`ToPerson`) so the rest of the tool never sees source formats.
 
 **`internal/geo`** geocodes place strings through Nominatim with historic-spelling normalisation and a
@@ -95,7 +98,7 @@ re-queried.
 (`loose`, `lev1`), dates and spouse surnames. Tests pin the scoring rules; add a case when changing them.
 The British services stem their search terms instead (a search for Wooding returns Wood), so `gazette/score.go`
 and `tna/score.go` use `internal/namematch` and require the surname exactly, relaxing to one edit only for a
-Gazette page scanned from print. The Nordic scorers (`riksarkivet`, `linklives`) compare names through
+Gazette page scanned from print. The Nordic scorers (`riksarkivet`, `linklives`, `news`) compare names through
 `namematch.Nordic`, which folds accents, spelling variants and the -sen/-son/-datter/-dotter endings, and hold a
 match on names and dates alone below `Keep` unless a parent, spouse, household member or parish backs it.
 `internal/place` holds the region rules `leads` and the sweeps share, including `place.Ancestors`, with which the
@@ -115,6 +118,8 @@ downloaded, matching columns by header name, and writes link-lives.dk URLs for t
   is the most kin may do, and for the FreeUKGen sites only the search page plus the values to type.
   The same holds for Digitalarkivet's search, histreg.no, the Link-Lives site and API, DDD, HisKi, the Swedish
   census search and Íslendingabók: links only. Link-Lives data is used solely through the release the user downloads.
+  Newspapers likewise: the British Newspaper Archive / Findmypast, Welsh Newspapers Online, Irish Newspaper
+  Archives, Svenska dagstidningar (tidningar.kb.se), timarit.is and Digi get links from `leads`, never a client.
 - Living people are never hidden by the renderers; the `living` flag is carried through, and `kin graph redact`
   (`model.Graph.Redacted`, an allow-list in `Person.Redact`) is the one place that strips dates, places and free
   text from them. A new `Person` field must be classified there as well as added to `Merge`.
