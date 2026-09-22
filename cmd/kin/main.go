@@ -85,7 +85,7 @@ func usage() {
   riksarkivet sweep  -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-delay 1s] [-resume] [-dry-run] -out data/riksarkivet.json   (baptisms and marriages for every Swedish ancestor)
   linklives sweep    -dir data/linklives -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-dry-run] -out data/linklives.json   (Danish censuses 1787-1901 and Copenhagen burials, from your download of Link-Lives release 2; nothing is fetched)
   war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
-  report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
+  report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] [-client] [-notes-title "…"] -out dist/report.html   (printable ancestry report; -client for the reader's copy)
   leads              -graph data/graph.json -root seed:me [-probable wt:X] [-upstream wt:] [-searched seed/searched.json] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
   version            print the version, commit and build date
 `)
@@ -823,7 +823,9 @@ func cmdReport(args []string) {
 	dash := fs.String("dashboard-url", "", "URL of the dashboard, linked at the top of the page on screen only (optional)")
 	var probable, notes multi
 	fs.Var(&probable, "probable", "person id from which upward the line is only probable (repeatable)")
-	fs.Var(&notes, "note", "note to print under open questions (repeatable)")
+	fs.Var(&notes, "note", "note to print under open questions, or as a paragraph of the story with -client (repeatable)")
+	client := fs.Bool("client", false, "the report is for a client or relative: leave out where to order copies and the dashboard link, and print the notes as narrative")
+	notesTitle := fs.String("notes-title", "", "heading over the notes (default \"Notes and open questions\", or \"The story of this line\" with -client)")
 	fs.Parse(args)
 	need("root", *root)
 	if *reader == "" {
@@ -836,7 +838,8 @@ func cmdReport(args []string) {
 	}
 	die(os.MkdirAll(filepath.Dir(*out), 0o755))
 	die(report.Render(g, report.Options{Root: *root, Reader: *reader, Title: *title, Subtitle: *subtitle, MaxGen: *maxGen,
-		ProbableIDs: probable, Notes: notes, RecordsPath: *records, DashboardURL: *dash}, *out))
+		ProbableIDs: probable, Notes: notes, RecordsPath: *records, DashboardURL: *dash,
+		Client: *client, NotesTitle: *notesTitle}, *out))
 	logf("report: wrote %s", *out)
 }
 
