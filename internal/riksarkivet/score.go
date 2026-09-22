@@ -6,6 +6,7 @@ import (
 
 	"github.com/richardwooding/kin/internal/model"
 	"github.com/richardwooding/kin/internal/namematch"
+	"github.com/richardwooding/kin/internal/place"
 )
 
 // Keep is the least score worth showing.
@@ -203,7 +204,7 @@ func parishIn(parish, places string) bool {
 	if parish == "" {
 		return false
 	}
-	mine := namematch.PlaceTokens(places)
+	mine := place.Distinct(places)
 	for _, w := range namematch.Tokens(parish) {
 		for _, m := range mine {
 			if w == m {
