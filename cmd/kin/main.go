@@ -1,11 +1,12 @@
 // kin — ancestry toolkit: pulls family records from public sources (WikiTree,
-// eGGSA, NAAIRS, Wikidata), merges them into one kinship graph, labels the
+// eGGSA, NAAIRS, Wikidata, Riksarkivet, Link-Lives), merges them into one kinship graph, labels the
 // relationships and renders an ancestry page and printable reports.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -20,10 +21,12 @@ import (
 	"github.com/richardwooding/kin/internal/graph"
 	"github.com/richardwooding/kin/internal/httpx"
 	"github.com/richardwooding/kin/internal/leads"
+	"github.com/richardwooding/kin/internal/linklives"
 	"github.com/richardwooding/kin/internal/model"
 	"github.com/richardwooding/kin/internal/naairs"
 	"github.com/richardwooding/kin/internal/place"
 	"github.com/richardwooding/kin/internal/report"
+	"github.com/richardwooding/kin/internal/riksarkivet"
 	"github.com/richardwooding/kin/internal/tna"
 	"github.com/richardwooding/kin/internal/tree"
 	"github.com/richardwooding/kin/internal/viz"
@@ -78,6 +81,9 @@ func usage() {
   gazette sweep      -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-max 2] [-delay 1.1s] [-resume] [-dry-run] -out data/gazette.json   (score notices for every British and Irish ancestor)
   tna                -q "Wooding Portsmouth" [-series "PROB 11"] [-held kew|elsewhere|all] [-from 1780 -to 1860] [-list] [-out data/tna_wooding.json]   (UK National Archives Discovery catalogue)
   tna sweep          -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-frontier] [-resume] [-dry-run] -out data/tna.json   (wills, death duties and record offices for every British ancestor)
+  riksarkivet        -name "Nils Johansson" [-type birth|marriage] [-from 1880 -to 1890] [-place Mjällby] [-out data/ra_nils.json]   (Swedish National Archives birth and marriage registers)
+  riksarkivet sweep  -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-delay 1s] [-resume] [-dry-run] -out data/riksarkivet.json   (baptisms and marriages for every Swedish ancestor)
+  linklives sweep    -dir data/linklives -graph data/graph.json -root seed:me [-probable wt:X] [-gen 20] [-dry-run] -out data/linklives.json   (Danish censuses 1787-1901 and Copenhagen burials, from your download of Link-Lives release 2; nothing is fetched)
   war                -graph data/graph.json -from seed:me [-min-birth 1855] [-max-birth 1927] [-boer] -out data/war.json   (military records for the men of the tree: UK National Archives series and the SA archives for 1899-1903)
   report             -root seed:me [-reader seed:me] -title "…" [-probable wt:X] [-note "…"] -out dist/report.html   (printable ancestry report)
   leads              -graph data/graph.json -root seed:me [-probable wt:X] [-upstream wt:] [-searched seed/searched.json] [-id fs:X] [-out dist/leads.html]   (search links for every ancestor still missing a parent; nothing is fetched)
@@ -126,6 +132,10 @@ func main() {
 		cmdGazette(ctx, os.Args[2:])
 	case "tna":
 		cmdTNA(ctx, os.Args[2:])
+	case "riksarkivet":
+		cmdRiksarkivet(ctx, os.Args[2:])
+	case "linklives":
+		cmdLinkLives(os.Args[2:])
 	default:
 		usage()
 	}
@@ -1323,4 +1333,202 @@ func cmdTNASweep(ctx context.Context, args []string) {
 		}
 	})
 	logf("tna sweep: wrote %s", *out)
+}
+
+// ---------------------------------------------------------------- riksarkivet
+
+func cmdRiksarkivet(ctx context.Context, args []string) {
+	if len(args) > 0 && args[0] == "sweep" {
+		cmdRiksarkivetSweep(ctx, args[1:])
+		return
+	}
+	fs := flag.NewFlagSet("riksarkivet", flag.ExitOnError)
+	name := fs.String("name", "", "names to find (e.g. \"Nils Johansson\")")
+	kind := fs.String("type", "birth", "birth or marriage")
+	from := fs.Int("from", 0, "earliest year (CCYY)")
+	to := fs.Int("to", 0, "latest year (CCYY)")
+	where := fs.String("place", "", "place name to narrow the search")
+	max := fs.Int("max", 25, "entries to read, at most 100")
+	cache := fs.String("cache", "data/cache/riksarkivet", "directory of cached answers; empty disables it")
+	out := fs.String("out", "", "write the entries as json")
+	fs.Parse(args)
+	need("name", *name)
+	q := riksarkivet.Query{Name: *name, Place: *where, YearMin: *from, YearMax: *to, Limit: *max}
+	switch strings.ToLower(*kind) {
+	case "birth", "births":
+		q.Type = riksarkivet.Birth
+	case "marriage", "marriages":
+		q.Type = riksarkivet.Marriage
+	default:
+		die(fmt.Errorf("-type must be birth or marriage"))
+	}
+	recs, total, err := riksarkivet.NewCached(*cache).Search(ctx, q)
+	die(err)
+	logf("riksarkivet: %d entries, %d read", total, len(recs))
+	for _, r := range recs {
+		fmt.Printf("%-10s %s\n", r.Date, trim(r.Text(), 110))
+	}
+	if *out != "" {
+		b, _ := json.MarshalIndent(recs, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+		logf("riksarkivet: wrote %s", *out)
+	}
+}
+
+// cmdRiksarkivetSweep searches the Swedish birth and marriage registers for
+// every Swedish ancestor.
+func cmdRiksarkivetSweep(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("riksarkivet sweep", flag.ExitOnError)
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are swept (required)")
+	var probable multi
+	fs.Var(&probable, "probable", "person whose link to their parents is unproven (repeatable)")
+	gen := fs.Int("gen", 20, "generations above -root")
+	min := fs.Int("min", riksarkivet.Keep, "keep candidates scoring at least this")
+	delay := fs.Duration("delay", time.Second, "pause between requests")
+	cache := fs.String("cache", "data/cache/riksarkivet", "directory of cached answers; empty disables it")
+	resume := fs.Bool("resume", false, "skip persons already in -out")
+	dry := fs.Bool("dry-run", false, "print the queries and stop, fetching nothing")
+	out := fs.String("out", "data/riksarkivet.json", "results json")
+	fs.Parse(args)
+	need("root", *root)
+	g, err := model.Load(*gp)
+	die(err)
+	opts := riksarkivet.SweepOptions{Root: *root, ProbableIDs: probable, MaxGen: *gen, Min: *min, Log: logf}
+	ids := riksarkivet.People(g, opts)
+
+	if *dry {
+		seen := map[string]bool{}
+		for _, id := range ids {
+			p := g.Persons[g.Resolve(id)]
+			fmt.Printf("%s (%s-%s)\n", p.Name, model.Year(p.Birth), model.Year(p.Death))
+			for _, q := range riksarkivet.Plan(g, p) {
+				fmt.Printf("  %s\n", q.URL())
+				seen[q.URL()] = true
+			}
+		}
+		logf("riksarkivet sweep: %d people, %d distinct queries", len(ids), len(seen))
+		return
+	}
+
+	results := map[string]riksarkivet.SweepResult{}
+	if *resume {
+		if b, err := os.ReadFile(*out); err == nil {
+			var prev []riksarkivet.SweepResult
+			if json.Unmarshal(b, &prev) == nil {
+				for _, r := range prev {
+					if r.Err == "" {
+						results[r.ID] = r
+					}
+				}
+			}
+		}
+	}
+	var todo []string
+	for _, id := range ids {
+		if _, done := results[id]; !done {
+			todo = append(todo, id)
+		}
+	}
+	logf("riksarkivet sweep: %d Swedish ancestors, %d to query", len(ids), len(todo))
+	save := func() {
+		list := make([]riksarkivet.SweepResult, 0, len(results))
+		for _, id := range ids {
+			if r, ok := results[id]; ok {
+				list = append(list, r)
+			}
+		}
+		b, _ := json.MarshalIndent(list, "", "  ")
+		die(os.MkdirAll(filepath.Dir(*out), 0o755))
+		die(os.WriteFile(*out, b, 0o644))
+	}
+	c := riksarkivet.NewCached(*cache)
+	c.Delay = *delay
+	done := 0
+	c.Sweep(ctx, g, todo, opts, func(r riksarkivet.SweepResult) {
+		done++
+		results[r.ID] = r
+		save()
+		if r.Err != "" {
+			logf("[%d/%d] %s: error %s", done, len(todo), r.Name, r.Err)
+			return
+		}
+		logf("[%d/%d] %s (%s-%s): %d entries, %d candidates", done, len(todo), r.Name, model.Year(r.Birth), model.Year(r.Death), r.Total, len(r.Hits))
+		for i, h := range r.Hits {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("  %d  %-10s %s  %s\n", h.Score, h.Date, trim(h.Text(), 80), strings.Join(h.Why, ", "))
+		}
+	})
+	logf("riksarkivet sweep: wrote %s", *out)
+}
+
+// ---------------------------------------------------------------- linklives
+
+func cmdLinkLives(args []string) {
+	if len(args) == 0 || args[0] != "sweep" {
+		usage()
+	}
+	fs := flag.NewFlagSet("linklives sweep", flag.ExitOnError)
+	dir := fs.String("dir", "data/linklives", "folder of the Link-Lives release 2 download from DigiData")
+	gp := fs.String("graph", "data/graph.json", "graph json")
+	root := fs.String("root", "", "person whose ancestors are swept (required)")
+	var probable multi
+	fs.Var(&probable, "probable", "person whose link to their parents is unproven (repeatable)")
+	gen := fs.Int("gen", 20, "generations above -root")
+	min := fs.Int("min", linklives.Keep, "keep candidates scoring at least this")
+	dry := fs.Bool("dry-run", false, "list the people, surnames and files and stop, reading no rows")
+	out := fs.String("out", "data/linklives.json", "results json")
+	fs.Parse(args[1:])
+	need("root", *root)
+	g, err := model.Load(*gp)
+	die(err)
+	opts := linklives.SweepOptions{Root: *root, ProbableIDs: probable, MaxGen: *gen, Min: *min, Log: logf}
+	ids := linklives.People(g, opts)
+
+	if *dry {
+		for _, id := range ids {
+			p := g.Persons[g.Resolve(id)]
+			fmt.Printf("%s (%s-%s)\n", p.Name, model.Year(p.Birth), model.Year(p.Death))
+		}
+		fmt.Printf("surnames: %s\n", strings.Join(linklives.Surnames(g, ids), ", "))
+		files, _ := linklives.Files(*dir)
+		for _, f := range files {
+			fmt.Printf("  %s (%s)\n", f, linklives.Label(f))
+		}
+		if lc := linklives.LifeCourses(*dir); lc != "" {
+			fmt.Printf("  %s (life courses)\n", lc)
+		}
+		logf("linklives sweep: %d Danish ancestors, %d files", len(ids), len(files))
+		return
+	}
+	if len(ids) == 0 {
+		logf("linklives sweep: no Danish ancestors")
+		return
+	}
+	files, err := linklives.Files(*dir)
+	if !errors.Is(err, os.ErrNotExist) {
+		die(err)
+	}
+	if len(files) == 0 {
+		die(fmt.Errorf("no harmonised (*_std.csv) files under %s; download Link-Lives release 2 from https://digidata.rigsarkivet.dk/aflevering/14001", *dir))
+	}
+	logf("linklives sweep: %d Danish ancestors across %d files", len(ids), len(files))
+	results, err := linklives.Sweep(*dir, g, ids, opts)
+	die(err)
+	for _, r := range results {
+		logf("%s (%s-%s): %d appearances, %d candidates", r.Name, model.Year(r.Birth), model.Year(r.Death), r.Total, len(r.Hits))
+		for i, h := range r.Hits {
+			if i >= 3 {
+				break
+			}
+			fmt.Printf("  %d  %-18s %s b.%d %s  %s  %s\n", h.Score, h.Source, h.Name, h.BirthYear, h.EventPlace, strings.Join(h.Why, ", "), h.URL)
+		}
+	}
+	b, _ := json.MarshalIndent(results, "", "  ")
+	die(os.MkdirAll(filepath.Dir(*out), 0o755))
+	die(os.WriteFile(*out, b, 0o644))
+	logf("linklives sweep: wrote %s", *out)
 }
