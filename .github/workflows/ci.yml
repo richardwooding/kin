@@ -30,6 +30,8 @@ jobs:
           go run ./cmd/kin graph report -graph /tmp/kin/graph.json -from seed:me
           go run ./cmd/kin viz -graph /tmp/kin/graph.json -seed seed:me -site examples/site.json -records examples/records.json -notices "" -out /tmp/kin/index.html
           go run ./cmd/kin report -graph /tmp/kin/graph.json -root seed:me -records examples/records.json -out /tmp/kin/report.html
+          go run ./cmd/kin report -graph /tmp/kin/graph.json -root seed:me -records examples/records.json -client -note "A story." -out /tmp/kin/client.html
+          grep -q 'The story of this line' /tmp/kin/client.html && ! grep -q 'Where to order copies' /tmp/kin/client.html
           go run ./cmd/kin leads -graph /tmp/kin/graph.json -root seed:me -out /tmp/kin/leads.html | grep -q 'kin naairs -db'
           grep -q 'cornwall-opc-database.org' /tmp/kin/leads.html || grep -q 'familysearch.org' /tmp/kin/leads.html
           grep -q 'thegazette.co.uk/all-notices' /tmp/kin/leads.html

@@ -54,6 +54,8 @@ type Data struct {
 	Families                           []Family
 	Records                            []Record
 	Notes                              []string
+	NotesTitle                         string
+	Client                             bool
 	Probable                           map[string]bool
 	DashboardURL                       string // linked at the top of the page on screen only
 }
@@ -69,6 +71,8 @@ type Options struct {
 	Notes        []string
 	RecordsPath  string
 	DashboardURL string // URL of the dashboard, linked at the top of the page on screen only (optional)
+	Client       bool   // the deliverable for a client: no ordering section or dashboard link, notes as narrative
+	NotesTitle   string // heading over the notes; defaults by mode
 }
 
 // Render writes the HTML report for opts to path.
@@ -144,7 +148,17 @@ func Render(g *model.Graph, opts Options, path string) error {
 	}
 	sort.Ints(nums)
 	d := Data{Title: opts.Title, Subtitle: opts.Subtitle, Subject: root, Probable: probable, Notes: opts.Notes,
+		NotesTitle: opts.NotesTitle, Client: opts.Client,
 		Generated: time.Now().Format("2 January 2006"), DashboardURL: opts.DashboardURL}
+	if d.Client {
+		d.DashboardURL = ""
+	}
+	if d.NotesTitle == "" {
+		d.NotesTitle = "Notes and open questions"
+		if d.Client {
+			d.NotesTitle = "The story of this line"
+		}
+	}
 	if rd := g.Persons[opts.Reader]; rd != nil {
 		d.Reader = rd.Name
 	}

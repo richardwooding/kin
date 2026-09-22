@@ -30,6 +30,7 @@
   ul.kids li { margin: 0 0 1pt; }
   .me { font-weight: 600; }
   .notes li { margin-bottom: 4pt; }
+  .story p { margin: 0 0 10pt; }
   .records td:first-child { white-space: nowrap; }
   .foot { margin-top: 18pt; padding-top: 6pt; border-top: 1px solid var(--rule); font-size: 8.5pt; color: var(--muted); }
   a { color: inherit; }
@@ -100,6 +101,7 @@
 </table>
 {{end}}
 
+{{if not .Client}}
 <h2>Where to order copies</h2>
 <p>Archive references above (prefixed KAB, TAB or TBE) are index entries from NAAIRS, the National Archives of South Africa's finding aid. Copies of the files are supplied on written request, quoting the full reference:</p>
 <ul class="notes">
@@ -111,11 +113,13 @@
   <li>English entries: General Register Office (gro.gov.uk) for civil registration images; Kresen Kernow, Redruth, for Cornish parish registers.</li>
 </ul>
 <p class="src">Contact details for the South African repositories are on the National Archives site, national.archives.gov.za, under Contact information.</p>
+{{end}}
 
 {{if .Notes}}
-<h2>Notes and open questions</h2>
-<ul class="notes">{{range .Notes}}<li>{{.}}</li>{{end}}</ul>
-{{end}}
+<h2>{{.NotesTitle}}</h2>
+{{if .Client}}<div class="story">{{range .Notes}}<p>{{.}}</p>{{end}}</div>
+{{else}}<ul class="notes">{{range .Notes}}<li>{{.}}</li>{{end}}</ul>
+{{end}}{{end}}
 
 <p class="foot">Generated {{.Generated}} by the kin toolkit from FamilySearch index entries supplied by the reader, WikiTree profiles, and the eGGSA gravestone and newspaper indexes. WikiTree data is contributed by volunteers and should be verified against original records before being relied on.</p>
 </body></html>

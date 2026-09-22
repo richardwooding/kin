@@ -99,7 +99,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL]` | — | Writes the pan-and-zoom family tree page |
 | `kin map -graph data/graph.json -root seed:me [-reader id] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL]` | Nominatim (OpenStreetMap) for coordinates | Writes a pan-and-zoom map of the ancestors' birth and death places |
 | `kin leads -graph data/graph.json -root seed:me [-probable id] [-id fs:X] [-out dist/leads.html]` | — | Prints search links for every ancestor still missing a parent, and for the probable ids, on FamilySearch, Cornwall OPC, WikiTree, the National Archives, the South African archives and the Nordic archives; fetches nothing |
-| `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …] [-dashboard-url URL]` | — | Writes a printable A4 ancestry report that also reads as a web page |
+| `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …] [-client] [-notes-title …] [-dashboard-url URL]` | — | Writes a printable A4 ancestry report that also reads as a web page; `-client` makes the reader's copy |
 
 Every subcommand prints its flags with `-h`.
 
@@ -239,6 +239,21 @@ link the reports from the dashboard, list them under `links` in the site file;
 `-dashboard-url URL` puts a link back to the dashboard at the top of the page.
 The print layout is A4; on screen the same file reads as a web page, and on a
 phone each table row stacks into a card, while the PDF is unchanged.
+
+By default the report is the researcher's: the notes print as a list of open
+questions under "Notes and open questions", and the ordering addresses are
+included. `-client` makes the copy for a client or a relative instead: it leaves
+out "Where to order copies" and the dashboard link, and prints each `-note` as a
+paragraph under "The story of this line". `-notes-title` changes that heading in
+either mode. The records stay in, since the sources belong in a family history,
+so write their `detail` text for the reader, and keep research notes and the
+client's narrative apart, rendering each into its own file:
+
+```sh
+kin report -root seed:mother -reader seed:me -note "Next: read the MOOC estate file" -out dist/jones-line.html
+kin report -root seed:mother -reader seed:me -client -notes-title "The Joneses of Cardigan" \
+  -note "Mary Jones was born in Cardigan in 1852…" -note "She came to the Cape in 1879…" -out dist/client/jones-line.html
+```
 
 ## Research leads
 

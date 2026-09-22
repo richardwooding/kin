@@ -45,3 +45,42 @@ func TestRenderSmoke(t *testing.T) {
 		t.Error("back link rendered without a dashboard url")
 	}
 }
+
+func TestRenderClientMode(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "report.html")
+	notes := []string{"John Smith was born in Portsmouth.", "He married Mary Jones."}
+	render := func(o Options) string {
+		o.Root, o.Reader, o.Title, o.Notes = "me", "me", "t", notes
+		if err := Render(twoGen(), o, out); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := os.ReadFile(out)
+		return string(b)
+	}
+
+	s := render(Options{DashboardURL: "index.html"})
+	for _, want := range []string{"Where to order copies", "<h2>Notes and open questions</h2>", "<li>John Smith was born in Portsmouth.</li>", "Back to the dashboard"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the researcher's report lacks %q", want)
+		}
+	}
+
+	s = render(Options{Client: true, DashboardURL: "index.html"})
+	for _, gone := range []string{"Where to order copies", "Notes and open questions", "Back to the dashboard", "<li>John Smith"} {
+		if strings.Contains(s, gone) {
+			t.Errorf("the client's report still has %q", gone)
+		}
+	}
+	for _, want := range []string{"<h2>The story of this line</h2>", "<p>John Smith was born in Portsmouth.</p>", "<p>He married Mary Jones.</p>", "John Smith"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the client's report lacks %q", want)
+		}
+	}
+
+	if s := render(Options{Client: true, NotesTitle: "The Smiths of Portsmouth"}); !strings.Contains(s, "<h2>The Smiths of Portsmouth</h2>") {
+		t.Error("-notes-title overrides the client heading")
+	}
+	if s := render(Options{NotesTitle: "To do"}); !strings.Contains(s, "<h2>To do</h2>") || !strings.Contains(s, "<li>He married") {
+		t.Error("-notes-title overrides the research heading and keeps the list")
+	}
+}
