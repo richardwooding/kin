@@ -13,14 +13,10 @@ package riksarkivet
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/richardwooding/kin/internal/httpx"
 )
@@ -129,20 +125,9 @@ func (r Record) Text() string {
 	return strings.Join(parts, ", ")
 }
 
-type Client struct {
-	HTTP    *http.Client
-	Delay   time.Duration   // after every request the cache could not answer
-	Backoff []time.Duration // waits before retrying a throttled or dropped request
-	Cache   *httpx.Cache
-}
+type Client struct{ *httpx.Polite }
 
-func New() *Client {
-	return &Client{
-		HTTP:    &http.Client{Timeout: 60 * time.Second},
-		Delay:   time.Second,
-		Backoff: []time.Duration{15 * time.Second, 45 * time.Second, 90 * time.Second, 180 * time.Second},
-	}
-}
+func New() *Client { return &Client{httpx.NewPolite("riksarkivet")} }
 
 // NewCached returns a client keeping every answer under dir.
 func NewCached(dir string) *Client {
@@ -230,71 +215,6 @@ func (c *Client) Detail(ctx context.Context, r *Record) error {
 	return nil
 }
 
-// errRetry marks an answer worth asking again after a pause.
-var errRetry = errors.New("retry")
-
-// fetch reads one address, from the cache when it holds it, pausing after
-// every request that reached the archive. A 429 or 503, or a dropped
-// connection, is retried after each Backoff wait in turn.
 func (c *Client) fetch(ctx context.Context, u string) ([]byte, error) {
-	if b, ok := c.Cache.Get(u); ok {
-		return b, nil
-	}
-	for attempt := 0; ; attempt++ {
-		b, wait, err := c.get(ctx, u)
-		if c.Delay > 0 {
-			if err := sleep(ctx, c.Delay); err != nil {
-				return nil, err
-			}
-		}
-		if !errors.Is(err, errRetry) || attempt >= len(c.Backoff) {
-			return b, err
-		}
-		if wait < c.Backoff[attempt] {
-			wait = c.Backoff[attempt]
-		}
-		if err := sleep(ctx, wait); err != nil {
-			return nil, err
-		}
-	}
-}
-
-// get makes one request; wait is the server's Retry-After, if it gave one.
-func (c *Client) get(ctx context.Context, u string) (body []byte, wait time.Duration, err error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	req.Header.Set("User-Agent", httpx.UserAgent())
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, 0, ctx.Err()
-		}
-		return nil, 0, fmt.Errorf("riksarkivet: %v: %w", err, errRetry)
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	switch {
-	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable:
-		secs, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
-		return nil, time.Duration(secs) * time.Second, fmt.Errorf("riksarkivet: %s: %w", resp.Status, errRetry)
-	case resp.StatusCode != http.StatusOK:
-		return nil, 0, fmt.Errorf("riksarkivet: %s", resp.Status)
-	case err != nil:
-		return nil, 0, fmt.Errorf("riksarkivet: %v: %w", err, errRetry)
-	}
-	return b, 0, nil
-}
-
-func sleep(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
+	return c.Get(ctx, u, "application/json")
 }
