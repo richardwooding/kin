@@ -97,6 +97,7 @@
   svg.lod-0 text { display: none; }
   path.link { fill: none; stroke: var(--link); stroke-width: 1.5; }
   path.link.stub { stroke-dasharray: 4 3; stroke: var(--axis); }
+  path.link.sib { stroke-dasharray: 2 3; stroke: var(--link-spouse); }
   g.toggle { cursor: pointer; }
   g.toggle circle { fill: var(--surface); stroke: var(--axis); }
   g.toggle circle.hit { display: none; fill: none; stroke: none; pointer-events: all; }
@@ -124,7 +125,7 @@
 </style>
 </head>
 <body>
-<svg id="tree" class="lod-3" role="img" aria-label="Pedigree chart"><g id="root"><g class="links"></g><g class="nodes"></g></g></svg>
+<svg id="tree" class="lod-3" role="img" aria-label="Pedigree chart"><g id="root"><g class="links"></g><g class="siblings"></g><g class="nodes"></g></g></svg>
 <div class="hud card">
   <div class="eyebrow" id="eyebrow">Family history · public records</div>
   <h1 id="title">Kin</h1>
@@ -151,7 +152,7 @@
 <script>
 (() => {
   const data = JSON.parse(document.getElementById('data').textContent);
-  const nodes = data.nodes || [], people = data.people || {}, records = data.records || [], site = data.site || {};
+  const nodes = data.nodes || [], siblings = data.siblings || [], people = data.people || {}, records = data.records || [], site = data.site || {};
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const year = s => (s || '').slice(0, 4).replace(/\D/g, '');
   const dates = p => { const b = year(p.birth), d = year(p.death); return b || d ? `${b || '?'} – ${d || (p.living ? '' : '?')}`.replace(/ – $/, '') : ''; };
@@ -166,6 +167,7 @@
   document.getElementById('eyebrow').textContent = site.eyebrow || 'Family history · public records';
 
   const byId = new Map(nodes.map(n => [n.id, n]));
+  siblings.forEach(s => byId.set(s.id, s));
   const byNum = new Map();
   nodes.forEach(n => n.n.forEach((k, i) => byNum.set(k, { node: n, primary: i === 0 })));
   const rootNode = byNum.get(1) && byNum.get(1).node;
@@ -177,6 +179,7 @@
   const clauses = [`${fmt(nodes.length - 1)} ancestors across ${data.generations} generations`];
   if (data.truncated) clauses.push(`${fmt(data.truncated)} beyond generation ${data.maxGen} not drawn`);
   if (data.dangling) clauses.push(`${fmt(data.dangling)} parents named but not in the graph`);
+  if (siblings.length) clauses.push(`${fmt(siblings.length)} sibling${siblings.length > 1 ? 's' : ''} of the root`);
   clauses.push(`relationships relative to ${data.readerName}`);
   sub.textContent = clauses.join(' · ');
   if (data.dashboardUrl) document.getElementById('nav').innerHTML = `<a href="${esc(data.dashboardUrl)}" target="_blank" rel="noopener">Open the dashboard &rarr;</a>`;
@@ -184,7 +187,7 @@
 
   const BOX_W = 190, BOX_H = 56, ROW = 68, COL = 270, PAD = 10;
   const DUR = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 350;
-  const svg = d3.select('#tree'), root = svg.select('#root'), gLinks = root.select('g.links'), gNodes = root.select('g.nodes');
+  const svg = d3.select('#tree'), root = svg.select('#root'), gLinks = root.select('g.links'), gSib = root.select('g.siblings'), gNodes = root.select('g.nodes');
   const svgEl = svg.node();
   const storeKey = `kin.tree.collapsed:${data.root}`;
   // Large trees open with everything beyond generation 4 folded away; the reader's
@@ -258,6 +261,43 @@
       g.append('text').attr('y', 4).text(off ? `+${subtreeSize(d.data.n)}` : '−');
       g.on('click', e => { e.stopPropagation(); toggle(d.data.node.id); });
     });
+    // Root's own full siblings are not on the ancestor line, so rather than sit in
+    // the d3 hierarchy (whose x-axis is generation) they stack in the root's own
+    // column, same "level" as the root, just above and below it, repositioned on
+    // every render. Slots skip zero so an odd sibling count never lands on the
+    // root's own row.
+    if (siblings.length) {
+      const rootD = layoutNodes[0];
+      const half = Math.floor(siblings.length / 2);
+      siblings.forEach((s, i) => {
+        const slot = i < half ? i - half : i - half + 1;
+        s.sx = rootD.sx;
+        s.sy = rootD.sy + slot * ROW;
+      });
+      const stack = siblings.concat([{ sx: rootD.sx, sy: rootD.sy }]).sort((a, b) => a.sy - b.sy);
+      const chain = stack.slice(1).map((d, i) => [stack[i], d]);
+      gSib.selectAll('path.link.sib').data(chain, d => (d[0].id || 'root') + '>' + (d[1].id || 'root'))
+        .join(enter => enter.append('path'))
+        .attr('class', 'link sib')
+        .attr('d', ([a, b]) => `M${a.sx + BOX_W / 2},${a.sy + BOX_H / 2}V${b.sy - BOX_H / 2}`);
+      const sg = gSib.selectAll('g.node.sib').data(siblings, d => d.id)
+        .join(enter => {
+          const g = enter.append('g');
+          g.append('rect').attr('class', 'box').attr('width', BOX_W).attr('height', BOX_H);
+          g.append('rect').attr('class', 'accent').attr('width', 4).attr('height', BOX_H).attr('rx', 2);
+          g.append('title');
+          ['l1', 'l2', 'l3', 'l0'].forEach(c => g.append('text').attr('class', 'lbl ' + c).attr('x', PAD + 6));
+          return g;
+        });
+      sg.attr('class', d => `node sib st-${d.status}`)
+        .attr('transform', d => `translate(${d.sx},${d.sy - BOX_H / 2})`)
+        .on('click', (e, d) => { e.stopPropagation(); openHit(d); });
+      sg.select('title').text(d => [d.name, dates(d), d.birthPlace ? 'b. ' + place(d.birthPlace) : '', d.rel].filter(Boolean).join('\n'));
+      sg.select('text.l1').attr('y', 20).attr('data-full', null).text(d => d.name);
+      sg.select('text.l2').attr('y', 35).text(d => dates(d));
+      sg.select('text.l3').attr('y', 48).attr('data-full', null).text(d => d.birthPlace ? place(d.birthPlace).split(',')[0] : '');
+      sg.select('text.l0').attr('y', 36).text(d => d.surname || lastWord(d.name));
+    }
     fitLabels();
   };
   const toggle = id => { if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id); saveCollapsed(); render(); };
@@ -273,6 +313,7 @@
   svg.on('click', () => hidePanel());
   const size = () => { const r = svgEl.getBoundingClientRect(); return { W: Math.max(320, r.width), H: Math.max(320, r.height) }; };
   const bounds = ns => ({ x0: d3.min(ns, d => d.sx), x1: d3.max(ns, d => d.sx) + BOX_W, y0: d3.min(ns, d => d.sy) - BOX_H / 2, y1: d3.max(ns, d => d.sy) + BOX_H / 2 });
+  const allBoxes = () => layoutNodes.concat(siblings.filter(s => s.sx !== undefined));
   const apply = (t, animate, mode) => { viewMode = mode || 'other'; return (animate && DUR ? svg.transition().duration(DUR) : svg).call(zoom.transform, t); };
   // The free area is the viewport minus the overlays (HUD and toolbar at the top,
   // or the toolbar at the bottom on narrow screens).
@@ -291,7 +332,7 @@
     if (k < zoom.scaleExtent()[0]) zoom.scaleExtent([k * 0.8, 6]);
     apply(d3.zoomIdentity.translate(f.left + w / 2 - k * (b.x0 + b.x1) / 2, f.top + h / 2 - k * (b.y0 + b.y1) / 2).scale(k), animate, mode);
   };
-  const fitAll = animate => fitTo(layoutNodes, animate, 'fit', 0, 1.5);
+  const fitAll = animate => fitTo(allBoxes(), animate, 'fit', 0, 1.5);
   const centreRoot = () => { const { W, H } = size(), d = layoutNodes[0]; apply(d3.zoomIdentity.translate(W * 0.12 - d.sx, H / 2 - d.sy).scale(1), true); };
   const zoomBy = f => (DUR ? svg.transition().duration(DUR) : svg).call(zoom.scaleBy, f);
   // A found person lands in the free area; on a phone the panel then opens as a bottom sheet over the lower 60%, so aim at the part that stays visible.
@@ -317,7 +358,7 @@
       ['Born', [year(p.birth) || (p.birth ? esc(p.birth) : ''), p.birthPlace ? esc(place(p.birthPlace)) : ''].filter(Boolean).join(', ')],
       ['Died', [year(p.death), p.deathPlace ? esc(place(p.deathPlace)) : ''].filter(Boolean).join(', ')],
       ['Occupation', (p.occupations || []).map(esc).join(', ')],
-      ['Ahnentafel', `#${p.n[0]}${p.n.length > 1 ? ' (also ' + p.n.slice(1).map(x => '#' + x).join(', ') + ')' : ''} · ${gen}`],
+      ['Ahnentafel', p.n && p.n.length ? `#${p.n[0]}${p.n.length > 1 ? ' (also ' + p.n.slice(1).map(x => '#' + x).join(', ') + ')' : ''} · ${gen}` : ''],
       ['Known from', `<span class="pill ${pillCls}">${esc(p.status)}</span>${p.sources && p.sources.length ? ' ' + esc(p.sources.join(', ')) : ''}`],
       ['Father', p.father ? (byId.has(p.father) ? `<button type="button" data-goto="${esc(p.father)}">${esc(nameOf(p.father))}</button>` : `${esc(nameOf(p.father))} <span class="note">(not drawn)</span>`) : ''],
       ['Mother', p.mother ? (byId.has(p.mother) ? `<button type="button" data-goto="${esc(p.mother)}">${esc(nameOf(p.mother))}</button>` : `${esc(nameOf(p.mother))} <span class="note">(not drawn)</span>`) : ''],
@@ -341,6 +382,15 @@
 
   const openHit = node => {
     if (!node) return;
+    if (!node.n || !node.n.length) {
+      if (node.sx === undefined) return; // a sibling not drawn (shouldn't happen) or an unrelated brief
+      flyTo(node);
+      try { history.replaceState(null, '', '#s=' + encodeURIComponent(node.id)); } catch (e) {}
+      gSib.selectAll('g.node.sib').classed('hit', d => d.id === node.id);
+      setTimeout(() => gSib.selectAll('g.node.sib.hit').classed('hit', false), 2200);
+      showPanel(node);
+      return;
+    }
     let changed = false;
     for (let m = node.n[0] >> 1; m >= 1; m >>= 1) { const h = byNum.get(m); if (h && collapsed.delete(h.node.id)) changed = true; }
     if (changed) { saveCollapsed(); render(); }
@@ -356,13 +406,13 @@
   const q = document.getElementById('q'), results = document.getElementById('results');
   let hits = [], active = -1;
   const showResults = () => {
-    results.innerHTML = hits.map((h, i) => `<li role="option" class="${i === active ? 'active' : ''}" data-i="${i}">${esc(h.name)}<span class="n">${esc([dates(h), h.rel && h.rel !== 'self' ? h.rel : '', '#' + h.n[0]].filter(Boolean).join(' · '))}</span></li>`).join('');
+    results.innerHTML = hits.map((h, i) => `<li role="option" class="${i === active ? 'active' : ''}" data-i="${i}">${esc(h.name)}<span class="n">${esc([dates(h), h.rel && h.rel !== 'self' ? h.rel : '', h.n && h.n.length ? '#' + h.n[0] : 'sibling'].filter(Boolean).join(' · '))}</span></li>`).join('');
     results.classList.toggle('show', hits.length > 0);
     results.querySelectorAll('li').forEach(li => li.onclick = () => { openHit(hits[+li.dataset.i]); hits = []; active = -1; showResults(); });
   };
   q.addEventListener('input', () => {
     const s = norm(q.value.trim());
-    hits = s.length < 2 ? [] : nodes.filter(n => norm(n.name).includes(s)).sort((a, b) => a.gen - b.gen || a.n[0] - b.n[0]).slice(0, 8);
+    hits = s.length < 2 ? [] : nodes.concat(siblings).filter(n => norm(n.name).includes(s)).sort((a, b) => a.gen - b.gen || (a.n ? a.n[0] : 0) - (b.n ? b.n[0] : 0)).slice(0, 8);
     active = hits.length ? 0 : -1; showResults();
   });
   q.addEventListener('keydown', e => {
@@ -389,18 +439,21 @@
   });
 
   // Initial view: fit everything when it stays readable, otherwise start at the
-  // root at full size. #n=<Ahnentafel number> opens that person; #fit forces a fit.
-  const fitScale = () => { const f = frame(), b = bounds(layoutNodes); return Math.min(1.5, 0.95 / Math.max((b.x1 - b.x0) / (f.W - 24), (b.y1 - b.y0) / (f.H - f.top - f.bottom))); };
+  // root at full size. #n=<Ahnentafel number> opens that person; #s=<id> opens a
+  // sibling; #fit forces a fit.
+  const fitScale = () => { const f = frame(), b = bounds(allBoxes()); return Math.min(1.5, 0.95 / Math.max((b.x1 - b.x0) / (f.W - 24), (b.y1 - b.y0) / (f.H - f.top - f.bottom))); };
+  const openSiblingHash = () => { const sm = /^#s=(.+)$/.exec(location.hash); const s = sm && siblings.find(x => x.id === decodeURIComponent(sm[1])); if (s) openHit(s); return !!s; };
   const initialView = () => {
     const m = /^#n=(\d+)$/.exec(location.hash);
     if (m && byNum.get(+m[1])) { openHit(byNum.get(+m[1]).node); return; }
+    if (openSiblingHash()) return;
     if (location.hash === '#fit' || fitScale() >= 0.5) fitAll(false);
-    else fitTo(layoutNodes.filter(d => d.depth <= 1), false, 'initial', 0.55, 1.2); // the root and parents, readable
+    else fitTo(layoutNodes.filter(d => d.depth <= 1).concat(siblings.filter(s => s.sx !== undefined)), false, 'initial', 0.55, 1.2); // the root, parents and siblings, readable
   };
   render();
   initialView();
   window.addEventListener('resize', () => { if (viewMode === 'fit') fitAll(false); else if (viewMode === 'initial') initialView(); });
-  window.addEventListener('hashchange', () => { const m = /^#n=(\d+)$/.exec(location.hash); if (m && byNum.get(+m[1])) openHit(byNum.get(+m[1]).node); });
+  window.addEventListener('hashchange', () => { const m = /^#n=(\d+)$/.exec(location.hash); if (m && byNum.get(+m[1])) { openHit(byNum.get(+m[1]).node); return; } openSiblingHash(); });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitLabels);
 })();
 </script>

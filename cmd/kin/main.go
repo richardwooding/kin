@@ -766,6 +766,7 @@ func cmdTree(args []string) {
 	records := fs.String("records", "records.json", "hand-collected record citations json (optional)")
 	dash := fs.String("dashboard-url", "", "absolute URL of the published dashboard page, linked from the panel (optional)")
 	out := fs.String("out", "dist/tree.html", "output html")
+	client := fs.Bool("client", false, "the tree is for a client or relative: leave out the internal research note text")
 	var probable multi
 	fs.Var(&probable, "probable", "person id from which upward the line is only probable (repeatable)")
 	fs.Parse(args)
@@ -775,7 +776,7 @@ func cmdTree(args []string) {
 	st, err := viz.LoadSite(*site)
 	die(err)
 	die(os.MkdirAll(filepath.Dir(*out), 0o755))
-	die(tree.Render(g, tree.Options{Root: *root, Reader: *reader, MaxGen: *gen, ProbableIDs: probable, RecordsPath: *records, DashboardURL: *dash, Site: st}, *out))
+	die(tree.Render(g, tree.Options{Root: *root, Reader: *reader, MaxGen: *gen, ProbableIDs: probable, RecordsPath: *records, DashboardURL: *dash, Site: st, Client: *client}, *out))
 	logf("tree: wrote %s", *out)
 }
 

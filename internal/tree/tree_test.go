@@ -171,6 +171,64 @@ func TestBuildProbableAndRecords(t *testing.T) {
 	}
 }
 
+func TestBuildClientDropsNote(t *testing.T) {
+	g := threeGen()
+	g.Persons["mm"].Note = "proven by her estate file, probably a misreading"
+	p, err := Build(g, Options{Root: "me", Client: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := byID(p)["mm"]; n.Note != "" {
+		t.Errorf("client tree kept a note: %q", n.Note)
+	}
+	p, err = Build(g, Options{Root: "me"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := byID(p)["mm"]; n.Note == "" {
+		t.Error("non-client tree should still carry the note")
+	}
+}
+
+func TestBuildSiblingsOfRoot(t *testing.T) {
+	g := threeGen()
+	g.Add(person("sib1", "Jamie Smith", "male", "1978", "f", "m"))
+	g.Add(person("sib2", "Casey Smith", "female", "1983", "f", "m"))
+	g.Persons["sib1"].Note = "adopted, needs confirming"
+	p, err := Build(g, Options{Root: "me"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Siblings) != 2 {
+		t.Fatalf("siblings %d, want 2: %+v", len(p.Siblings), p.Siblings)
+	}
+	if p.Siblings[0].ID != "sib1" || p.Siblings[1].ID != "sib2" {
+		t.Errorf("siblings not in birth order: %+v", p.Siblings)
+	}
+	if p.Siblings[0].Relation != "brother (or half-brother)" || p.Siblings[1].Relation != "sister (or half-sister)" {
+		t.Errorf("relation labels: %q %q", p.Siblings[0].Relation, p.Siblings[1].Relation)
+	}
+	if p.Siblings[0].Numbers != nil {
+		t.Errorf("a sibling should carry no Ahnentafel numbers, got %v", p.Siblings[0].Numbers)
+	}
+	if p.Siblings[0].Note == "" {
+		t.Error("non-client tree should keep the sibling note")
+	}
+	for _, n := range p.Nodes {
+		if n.ID == "sib1" || n.ID == "sib2" {
+			t.Errorf("a sibling must not also appear on the ancestor line: %s", n.ID)
+		}
+	}
+
+	pc, err := Build(g, Options{Root: "me", Client: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pc.Siblings[0].Note != "" {
+		t.Error("client tree kept a sibling note")
+	}
+}
+
 func TestRenderSmoke(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "tree.html")
 	err := Render(threeGen(), Options{Root: "me", Site: viz.Site{Title: "Smith Kin", Eyebrow: "Test"}, DashboardURL: "https://example.test/dash"}, out)

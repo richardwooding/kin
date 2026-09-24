@@ -29,6 +29,7 @@ type Options struct {
 	RecordsPath  string   // optional records json
 	DashboardURL string   // absolute URL of the published dashboard (optional)
 	Site         viz.Site // Title and Eyebrow are used
+	Client       bool     // the tree is for a client or relative: leave out the internal research note text
 }
 
 // Node is one person on the pedigree.
@@ -74,6 +75,7 @@ type Pedigree struct {
 	Root        string
 	Reader      string
 	Nodes       []Node           // breadth-first, ascending Ahnentafel number
+	Siblings    []Node           // Root's own full siblings, birth order; not on the ancestor line so they carry no Numbers
 	People      map[string]Brief // spouses and children who are not Nodes
 	Generations int              // deepest generation present
 	Dangling    int              // parent ids named on a node but absent from the graph
@@ -98,6 +100,7 @@ type Payload struct {
 	DashboardURL string            `json:"dashboardUrl,omitempty"`
 	Site         siteText          `json:"site"`
 	Nodes        []Node            `json:"nodes"`
+	Siblings     []Node            `json:"siblings,omitempty"`
 	People       map[string]Brief  `json:"people"`
 	Records      []json.RawMessage `json:"records"`
 }
@@ -155,34 +158,9 @@ func Build(g *model.Graph, opts Options, recs []json.RawMessage) (*Pedigree, err
 			continue
 		}
 		index[it.id] = len(ped.Nodes)
-		n := Node{
-			ID: p.ID, Numbers: []int{it.n}, Gen: gen, Name: p.Name, Given: p.Given, Surname: p.Surname,
-			Gender: p.Gender, Birth: p.Birth, Death: p.Death, BirthPlace: p.BirthPlace, DeathPlace: p.DeathPlace,
-			Occupations: p.Occupations, Sources: p.Sources, WikiTree: p.WikiTree, URL: p.URL, Living: p.Living,
-			Note: p.Note, Status: status(p, probable), Children: kids[p.ID],
-		}
-		if p.Father != "" {
-			n.Father = g.Resolve(p.Father)
-		}
-		if p.Mother != "" {
-			n.Mother = g.Resolve(p.Mother)
-		}
-		for _, s := range p.Spouses {
-			if s = g.Resolve(s); g.Persons[s] != nil {
-				n.Spouses = append(n.Spouses, s)
-			}
-		}
-		n.Spouses = model.Uniq(n.Spouses)
-		if p.ID == reader {
-			n.Relation = "self"
-		} else if rel, ok := graph.Relationship(g, reader, p.ID); ok {
-			n.Relation = graph.Gendered(rel.Label, p.Gender)
-		}
-		for i, rp := range recPerson {
-			if rp == p.ID {
-				n.Records = append(n.Records, i)
-			}
-		}
+		n := buildNode(g, p, reader, probable, kids, recPerson, opts.Client)
+		n.Numbers = []int{it.n}
+		n.Gen = gen
 		if gen > ped.Generations {
 			ped.Generations = gen
 		}
@@ -207,7 +185,91 @@ func Build(g *model.Graph, opts Options, recs []json.RawMessage) (*Pedigree, err
 			}
 		}
 	}
+	ped.Siblings = siblingNodes(g, root, index, probable, kids, recPerson, reader, opts.Client)
 	return ped, nil
+}
+
+// buildNode fills in every Node field that does not depend on the person's
+// place in the Ahnentafel walk (Numbers, Gen); callers set those themselves.
+func buildNode(g *model.Graph, p *model.Person, reader string, probable map[string]bool, kids map[string][]string, recPerson []string, client bool) Node {
+	n := Node{
+		ID: p.ID, Name: p.Name, Given: p.Given, Surname: p.Surname,
+		Gender: p.Gender, Birth: p.Birth, Death: p.Death, BirthPlace: p.BirthPlace, DeathPlace: p.DeathPlace,
+		Occupations: p.Occupations, Sources: p.Sources, WikiTree: p.WikiTree, URL: p.URL, Living: p.Living,
+		Note: p.Note, Status: status(p, probable), Children: kids[p.ID],
+	}
+	if client {
+		n.Note = ""
+	}
+	if p.Father != "" {
+		n.Father = g.Resolve(p.Father)
+	}
+	if p.Mother != "" {
+		n.Mother = g.Resolve(p.Mother)
+	}
+	for _, s := range p.Spouses {
+		if s = g.Resolve(s); g.Persons[s] != nil {
+			n.Spouses = append(n.Spouses, s)
+		}
+	}
+	n.Spouses = model.Uniq(n.Spouses)
+	if p.ID == reader {
+		n.Relation = "self"
+	} else if rel, ok := graph.Relationship(g, reader, p.ID); ok {
+		n.Relation = graph.Gendered(rel.Label, p.Gender)
+	}
+	for i, rp := range recPerson {
+		if rp == p.ID {
+			n.Records = append(n.Records, i)
+		}
+	}
+	return n
+}
+
+// siblingNodes returns root's own full siblings (other children of its
+// parents), birth order, skipping anyone already drawn as an ancestor.
+func siblingNodes(g *model.Graph, root string, index map[string]int, probable map[string]bool, kids map[string][]string, recPerson []string, reader string, client bool) []Node {
+	rp := g.Persons[root]
+	if rp == nil {
+		return nil
+	}
+	seen := map[string]bool{root: true}
+	var ids []string
+	for _, par := range []string{rp.Father, rp.Mother} {
+		if par == "" {
+			continue
+		}
+		for _, id := range kids[g.Resolve(par)] {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		a, b := g.Persons[ids[i]], g.Persons[ids[j]]
+		if a.Birth != b.Birth {
+			return a.Birth < b.Birth
+		}
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.ID < b.ID
+	})
+	var out []Node
+	for _, id := range ids {
+		if _, on := index[id]; on {
+			continue
+		}
+		p := g.Persons[id]
+		if p == nil {
+			continue
+		}
+		n := buildNode(g, p, reader, probable, kids, recPerson, client)
+		n.Gen = 0
+		out = append(out, n)
+	}
+	return out
 }
 
 // status follows the dashboard's rule: probable, then a person known from a
@@ -304,7 +366,7 @@ func Render(g *model.Graph, opts Options, path string) error {
 		Generated: time.Now().Format("2 January 2006"), MaxGen: maxGen,
 		Generations: ped.Generations, Dangling: ped.Dangling, Truncated: ped.Truncated,
 		DashboardURL: opts.DashboardURL, Site: siteText{Title: opts.Site.Title, Eyebrow: opts.Site.Eyebrow},
-		Nodes: ped.Nodes, People: ped.People, Records: recs,
+		Nodes: ped.Nodes, Siblings: ped.Siblings, People: ped.People, Records: recs,
 	}
 	b, err := json.Marshal(pl)
 	if err != nil {
