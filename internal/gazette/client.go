@@ -308,7 +308,28 @@ type rawEntry struct {
 	Links     flexLinks `json:"link"`
 }
 
+// decode reads one page of the feed.
+//
+// Scanned pages carry the text as the optical character reader saw it, and a
+// stray backslash in that text reaches the JSON unescaped: the March 1943
+// London Gazette page 1039 contains `\ar`, which encoding/json rejects,
+// failing the whole search. A body that will not parse is therefore repaired
+// once, by escaping only those stray backslashes, and read again. A body that
+// parses is never touched.
 func decode(b []byte) (*Feed, error) {
+	f, err := decodeFeed(b)
+	if err == nil {
+		return f, nil
+	}
+	if fixed, changed := escapeStrays(b); changed {
+		if f2, err2 := decodeFeed(fixed); err2 == nil {
+			return f2, nil
+		}
+	}
+	return f, err
+}
+
+func decodeFeed(b []byte) (*Feed, error) {
 	var raw struct {
 		Total    flexInt         `json:"f:total"`
 		Page     flexInt         `json:"f:page-number"`
@@ -337,4 +358,62 @@ func decode(b []byte) (*Feed, error) {
 		})
 	}
 	return f, nil
+}
+
+// escapeStrays doubles every backslash that begins an escape sequence JSON
+// does not define, inside string literals only, so that it decodes as the
+// backslash the page really holds. Valid escapes, including `\uXXXX`, and
+// everything outside a string are copied through byte for byte. It reports
+// whether it changed anything, so a body that is broken for some other reason
+// is not decoded twice.
+func escapeStrays(b []byte) ([]byte, bool) {
+	out := make([]byte, 0, len(b)+16)
+	inString, changed := false, false
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case !inString:
+			inString = c == '"'
+		case c == '"':
+			inString = false
+		case c == '\\' && i+1 < len(b):
+			// the byte after a backslash belongs to that escape whatever it
+			// is, so a backslash which is itself escaped is consumed here and
+			// can never be mistaken for the start of a bad one
+			if n := escapeLen(b[i+1:]); n > 0 {
+				out = append(out, b[i:i+1+n]...)
+				i += n
+				continue
+			}
+			out = append(out, '\\', '\\')
+			changed = true
+			continue
+		}
+		out = append(out, c)
+	}
+	return out, changed
+}
+
+// escapeLen returns the length of the escape introduced by the backslash just
+// before b, or zero when JSON defines no such escape.
+func escapeLen(b []byte) int {
+	switch b[0] {
+	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+		return 1
+	case 'u':
+		if len(b) < 5 {
+			return 0
+		}
+		for _, h := range b[1:5] {
+			if !isHex(h) {
+				return 0
+			}
+		}
+		return 5
+	}
+	return 0
+}
+
+func isHex(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
