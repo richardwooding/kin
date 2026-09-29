@@ -116,6 +116,34 @@ func TestCornwallLeads(t *testing.T) {
 	}
 }
 
+func TestSafliiGazetteYears(t *testing.T) {
+	cases := []struct {
+		birth, death, child string
+		want                bool
+	}{
+		{"1940-06-01", "2016", "", true},
+		{"1920", "1998", "", true},
+		{"1910", "1984", "", false},
+		{"1941", "", "", true},
+		{"1850", "", "", false},
+		{"", "", "", true},
+		{"", "", "1862", false},
+		{"", "", "1964", true},
+	}
+	for _, c := range cases {
+		p := &model.Person{ID: "x", Name: "Joan Lea", Given: "Joan", Surname: "Lea", Birth: c.birth, Death: c.death}
+		var kids []*model.Person
+		if c.child != "" {
+			kids = []*model.Person{{ID: "k", Name: "Ann Lea", Birth: c.child}}
+		}
+		sa := group(&Entry{Groups: groups(p, "Cape Town, South Africa", nil, kids)}, "South Africa")
+		got := sa != nil && strings.Contains(sa.Leads[len(sa.Leads)-1].URL, url.QueryEscape(`"Lea, Joan"`))
+		if got != c.want {
+			t.Errorf("birth %q death %q child %q: SAFLII lead %v, want %v", c.birth, c.death, c.child, got, c.want)
+		}
+	}
+}
+
 func TestSouthAfricaAndEnglandLeads(t *testing.T) {
 	entries := Build(testGraph(), Options{Root: "seed:me", ProbableIDs: []string{"wt:x"}})
 	m := find(entries, "fs:m")
@@ -123,8 +151,8 @@ func TestSouthAfricaAndEnglandLeads(t *testing.T) {
 	if sa == nil || !strings.HasPrefix(sa.Leads[0].Hint, "kin naairs -db KAB -q 'SWITZER CATHERINE' -from 1932 -to 1936") {
 		t.Errorf("NAAIRS hint wrong: %+v", sa)
 	}
-	if last := sa.Leads[len(sa.Leads)-1]; !strings.Contains(last.URL, "saflii.org") || !strings.Contains(last.URL, url.QueryEscape(`"Switzer, Catherine"`)) {
-		t.Errorf("Government Gazette estate notice search expected: %+v", last)
+	if last := sa.Leads[len(sa.Leads)-1]; strings.Contains(last.URL, "saflii.org") {
+		t.Errorf("a death of 1933 is before SAFLII's gazettes begin in 2000: %+v", last)
 	}
 	if fs := group(m, "FamilySearch"); len(fs.Leads) != 3 || !strings.Contains(fs.Leads[1].URL, "f.collectionId=1478678") || !strings.Contains(fs.Leads[2].URL, "f.collectionId=2517051") {
 		t.Errorf("Dutch Reformed and Cape probate leads expected: %+v", fs)
@@ -157,7 +185,7 @@ func TestBothCountries(t *testing.T) {
 	if sa := group(m, "South Africa"); sa == nil || !strings.Contains(sa.Leads[0].Hint, "-db TAB") {
 		t.Errorf("Transvaal depot expected: %+v", sa)
 	} else if len(sa.Leads) != 2 {
-		t.Errorf("a death before the Union Gazette of 1910 gets no estate notice search: %+v", sa)
+		t.Errorf("a death of 1900 gets no SAFLII estate notice search: %+v", sa)
 	}
 }
 

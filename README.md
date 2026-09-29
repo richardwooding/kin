@@ -376,10 +376,13 @@ and Mediestream holds the later Danish papers.
   v3.0".
 - **South African Government Gazette**: the deceased estate notices, one line
   each ("number/year, Surname, Given names, birth date, ID number, address, death
-  date, executor"), fill the 20th-century gap NAAIRS and eGGSA leave. SAFLII hosts
+  date, executor"), cover recent deaths that NAAIRS and eGGSA miss. SAFLII hosts
   the gazettes as PDFs behind a bot challenge, so `kin` has no client: `kin leads`
-  gives a web search of `saflii.org` for "Surname, First" to open, for anyone
-  alive in or after 1910, when the Union Government Gazette begins.
+  gives a web search of `saflii.org` for "Surname, First" to open. SAFLII's
+  national and provincial gazettes begin in 2000, so the lead is given only for a
+  death from 1997, or with no death date a birth from 1900 (estimated from the
+  eldest child's birth when the person's own is unknown). Google indexes only
+  part of each gazette PDF, so a search that finds nothing does not rule a notice out.
 - **Riksarkivet** (Swedish National Archives): the Search API at
   `data.riksarkivet.se` needs no key, its metadata is CC0 and its images Public
   Domain Mark, and its terms allow programs while reserving the right to throttle

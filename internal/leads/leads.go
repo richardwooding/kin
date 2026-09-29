@@ -373,7 +373,11 @@ func groups(p *model.Person, places string, spouse *model.Person, kids []*model.
 			{Label: "eGGSA gravestones", Hint: "kin eggsa graves -surname " + shellQuote(surname)},
 		}
 		// SAFLII's gazette host turns programs away, so the estate notices are a web search to open
-		if dy == 0 || dy >= 1910 {
+		born := by
+		if born == 0 && klo > 0 {
+			born = klo - 15
+		}
+		if gazetteTo(born, dy) >= safliiFrom {
 			q := fmt.Sprintf("site:saflii.org %q", surname+", "+first)
 			ls = append(ls, Lead{Label: "Government Gazette estate notices (web search)", URL: "https://www.google.com/search?q=" + url.QueryEscape(q)})
 		}
@@ -533,6 +537,9 @@ func gazetteTo(by, dy int) int {
 	}
 	return time.Now().Year()
 }
+
+// safliiFrom is the first year of SAFLII's national and provincial gazettes.
+const safliiFrom = 2000
 
 // gazette links to The Gazette's own search page, not to the JSON feed.
 func gazette(surname, first string, by, dy int, edition string) string {
