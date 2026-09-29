@@ -101,7 +101,7 @@ kin viz -graph data/graph.json -seed seed:me -notices data/papers.json -records 
 | `kin viz -graph data/graph.json -seed seed:me [-site site.json] [-notices …] [-records …] [-probable id] [-tree-url URL]` | — | Writes the ancestry page |
 | `kin tree -graph data/graph.json -root seed:me [-reader id] [-gen 20] [-site site.json] [-records …] [-probable id] [-dashboard-url URL] [-client]` | — | Writes the pan-and-zoom family tree page; `-client` leaves the free-text research note off each person |
 | `kin map -graph data/graph.json -root seed:me [-reader id] [-site site.json] [-cache data/cache/geo.json] [-places places.json] [-offline] [-dashboard-url URL] [-tree-url URL]` | Nominatim (OpenStreetMap) for coordinates | Writes a pan-and-zoom map of the ancestors' birth and death places |
-| `kin leads -graph data/graph.json -root seed:me [-probable id] [-id fs:X] [-out dist/leads.html]` | — | Prints search links for every ancestor still missing a parent, and for the probable ids, on FamilySearch, Cornwall OPC, WikiTree, the National Archives, the South African archives and the Nordic archives; fetches nothing |
+| `kin leads -graph data/graph.json -root seed:me [-probable id] [-id fs:X] [-out dist/leads.html]` | — | Prints search links for every ancestor still missing a parent, and for the probable ids, on FamilySearch, Cornwall OPC, WikiTree, the National Archives, the South African archives and Government Gazette and the Nordic archives; fetches nothing |
 | `kin report -root seed:me [-reader seed:me] [-title …] [-probable id] [-note …] [-client] [-notes-title …] [-dashboard-url URL]` | — | Writes a printable A4 ancestry report that also reads as a web page; `-client` makes the reader's copy |
 
 Every subcommand prints its flags with `-h`.
@@ -374,6 +374,12 @@ and Mediestream holds the later Danish papers.
   that rests on a notice, cite the edition, issue, page and date, and credit
   "Contains public sector information licensed under the Open Government Licence
   v3.0".
+- **South African Government Gazette**: the deceased estate notices, one line
+  each ("number/year, Surname, Given names, birth date, ID number, address, death
+  date, executor"), fill the 20th-century gap NAAIRS and eGGSA leave. SAFLII hosts
+  the gazettes as PDFs behind a bot challenge, so `kin` has no client: `kin leads`
+  gives a web search of `saflii.org` for "Surname, First" to open, for anyone
+  alive in or after 1910, when the Union Government Gazette begins.
 - **Riksarkivet** (Swedish National Archives): the Search API at
   `data.riksarkivet.se` needs no key, its metadata is CC0 and its images Public
   Domain Mark, and its terms allow programs while reserving the right to throttle

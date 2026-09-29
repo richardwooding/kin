@@ -35,6 +35,7 @@ jobs:
           go run ./cmd/kin leads -graph /tmp/kin/graph.json -root seed:me -out /tmp/kin/leads.html | grep -q 'kin naairs -db'
           grep -q 'cornwall-opc-database.org' /tmp/kin/leads.html || grep -q 'familysearch.org' /tmp/kin/leads.html
           grep -q 'thegazette.co.uk/all-notices' /tmp/kin/leads.html
+          grep -q 'saflii.org' /tmp/kin/leads.html
           go run ./cmd/kin gazette sweep -graph /tmp/kin/graph.json -root seed:me -dry-run | grep -q 'all-notices/notice/data.json'
           go run ./cmd/kin tna sweep -graph /tmp/kin/graph.json -root seed:me -frontier -dry-run | grep -q 'PROB+11'
           go run ./cmd/kin tna -list | grep -q 'Prerogative Court of Canterbury'
