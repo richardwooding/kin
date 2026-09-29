@@ -368,10 +368,16 @@ func groups(p *model.Person, places string, spouse *model.Person, kids []*model.
 		if dy > 0 {
 			na += fmt.Sprintf(" -from %d -to %d", dy-1, dy+3)
 		}
-		out = append(out, Group{Service: "South Africa", Leads: []Lead{
+		ls := []Lead{
 			{Label: "NAAIRS archives index", Hint: na},
 			{Label: "eGGSA gravestones", Hint: "kin eggsa graves -surname " + shellQuote(surname)},
-		}})
+		}
+		// SAFLII's gazette host turns programs away, so the estate notices are a web search to open
+		if dy == 0 || dy >= 1910 {
+			q := fmt.Sprintf("site:saflii.org %q", surname+", "+first)
+			ls = append(ls, Lead{Label: "Government Gazette estate notices (web search)", URL: "https://www.google.com/search?q=" + url.QueryEscape(q)})
+		}
+		out = append(out, Group{Service: "South Africa", Leads: ls})
 	}
 	out = append(out, nordic(r, first, surname, by, dy)...)
 	if g, ok := newspapers(r, first, surname, by, dy); ok {

@@ -117,7 +117,7 @@ downloaded, matching columns by header name, and writes link-lives.dk URLs for t
   Cornwall OPC allows personal research only, so never add a client for them; a pre-filled link the user opens
   is the most kin may do, and for the FreeUKGen sites only the search page plus the values to type.
   The same holds for Digitalarkivet's search, histreg.no, the Link-Lives site and API, DDD, HisKi, the Swedish
-  census search and Íslendingabók: links only. Link-Lives data is used solely through the release the user downloads.
+  census search, Íslendingabók and SAFLII's South African Government Gazettes: links only. Link-Lives data is used solely through the release the user downloads.
   Newspapers likewise: the British Newspaper Archive / Findmypast, Welsh Newspapers Online, Irish Newspaper
   Archives, Svenska dagstidningar (tidningar.kb.se), timarit.is and Digi get links from `leads`, never a client.
 - Living people are never hidden by the renderers; the `living` flag is carried through, and `kin graph redact`

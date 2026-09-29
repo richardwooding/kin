@@ -2,6 +2,7 @@ package leads
 
 import (
 	"bytes"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,6 +123,9 @@ func TestSouthAfricaAndEnglandLeads(t *testing.T) {
 	if sa == nil || !strings.HasPrefix(sa.Leads[0].Hint, "kin naairs -db KAB -q 'SWITZER CATHERINE' -from 1932 -to 1936") {
 		t.Errorf("NAAIRS hint wrong: %+v", sa)
 	}
+	if last := sa.Leads[len(sa.Leads)-1]; !strings.Contains(last.URL, "saflii.org") || !strings.Contains(last.URL, url.QueryEscape(`"Switzer, Catherine"`)) {
+		t.Errorf("Government Gazette estate notice search expected: %+v", last)
+	}
 	if fs := group(m, "FamilySearch"); len(fs.Leads) != 3 || !strings.Contains(fs.Leads[1].URL, "f.collectionId=1478678") || !strings.Contains(fs.Leads[2].URL, "f.collectionId=2517051") {
 		t.Errorf("Dutch Reformed and Cape probate leads expected: %+v", fs)
 	}
@@ -152,6 +156,8 @@ func TestBothCountries(t *testing.T) {
 	}
 	if sa := group(m, "South Africa"); sa == nil || !strings.Contains(sa.Leads[0].Hint, "-db TAB") {
 		t.Errorf("Transvaal depot expected: %+v", sa)
+	} else if len(sa.Leads) != 2 {
+		t.Errorf("a death before the Union Gazette of 1910 gets no estate notice search: %+v", sa)
 	}
 }
 
